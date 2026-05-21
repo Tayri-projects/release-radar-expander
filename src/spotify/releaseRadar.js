@@ -1,40 +1,24 @@
 /**
  * getReleaseRadar — trova la playlist Release Radar e scarica tutte le tracce
  *
- * La Release Radar è una "Made For You" playlist generata da Spotify.
- * Non appare in /me/playlists come playlist normali.
- *
- * Strategia definitiva (più robusta):
- * 1. Prova a leggere direttamente l'ID noto dell'utente (hardcoded dopo discovery).
- * 2. Se non funziona (token insufficiente, playlist rimossa), cerca via
- *    /me/playlists e search come fallback.
- *
- * ID Release Radar dell'utente: 37i9dQZEVXbhvRdPuaKypU
- * (ricavato dal link https://open.spotify.com/playlist/37i9dQZEVXbhvRdPuaKypU)
- *
- * NOTA: questo ID è stabile per un dato utente — Spotify non lo rigenera.
+ * La Release Radar è una "Made For You" playlist: non appare in /me/playlists.
+ * L'ID è stabile per utente ma non accessibile con fields su /playlists/{id}.
+ * Usiamo l'endpoint senza fields filter.
  */
 
 import { spotifyFetch } from '../auth/auth.js';
 
-// ID Release Radar dell'utente (da open.spotify.com/playlist/...)
 const RELEASE_RADAR_ID = '37i9dQZEVXbhvRdPuaKypU';
 
-/**
- * Trova la Release Radar. Prima prova l'ID diretto, poi fallback dinamici.
- * @returns {Promise<{id: string, name: string} | null>}
- */
 export async function findReleaseRadar() {
   console.log('[ReleaseRadar] Cerco la Release Radar...');
 
-  // --- Strategia 1: ID diretto (hardcoded) ---
+  // --- Strategia 1: ID diretto, senza fields filter ---
   try {
-    console.log('[ReleaseRadar] Strategia 1: accesso diretto per ID...');
-    const pl = await spotifyFetch(
-      `/playlists/${RELEASE_RADAR_ID}?fields=id,name,owner,snapshot_id,tracks.total`
-    );
+    console.log('[ReleaseRadar] Strategia 1: ID diretto...');
+    const pl = await spotifyFetch(`/playlists/${RELEASE_RADAR_ID}`);
     if (pl?.id) {
-      console.log(`[ReleaseRadar] Trovata: "${pl.name}" (${pl.tracks.total} tracce)`);
+      console.log(`[ReleaseRadar] Trovata: "${pl.name}" (${pl.tracks?.total} tracce)`);
       return { id: pl.id, name: pl.name };
     }
   } catch (e) {
@@ -57,14 +41,15 @@ export async function findReleaseRadar() {
       if (!data.next || offset + 50 >= data.total) break;
       offset += 50;
     }
+    console.log('[ReleaseRadar] Strategia 2: non trovata.');
   } catch (e) {
     console.warn('[ReleaseRadar] Strategia 2 fallita:', e.message);
   }
 
-  // --- Strategia 3: search API ---
+  // --- Strategia 3: search (limit max 20 per Spotify) ---
   try {
     console.log('[ReleaseRadar] Strategia 3: search...');
-    const results = await spotifyFetch(`/search?q=Release+Radar&type=playlist&limit=50`);
+    const results = await spotifyFetch(`/search?q=Release+Radar&type=playlist&limit=20`);
     for (const pl of (results?.playlists?.items || [])) {
       if (!pl?.owner) continue;
       if (pl.name === 'Release Radar' && pl.owner.id === 'spotify') {
@@ -72,19 +57,15 @@ export async function findReleaseRadar() {
         return { id: pl.id, name: pl.name };
       }
     }
+    console.log('[ReleaseRadar] Strategia 3: non trovata.');
   } catch (e) {
     console.warn('[ReleaseRadar] Strategia 3 fallita:', e.message);
   }
 
-  console.error('[ReleaseRadar] Release Radar non trovata.');
+  console.error('[ReleaseRadar] Release Radar non trovata con nessuna strategia.');
   return null;
 }
 
-/**
- * Scarica TUTTE le tracce della playlist (gestisce paginazione).
- * @param {string} playlistId
- * @returns {Promise<Array>}
- */
 export async function fetchAllPlaylistTracks(playlistId) {
   console.log('[ReleaseRadar] Scarico tracce della playlist:', playlistId);
 
@@ -100,13 +81,11 @@ export async function fetchAllPlaylistTracks(playlistId) {
     const data = await spotifyFetch(
       `/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&fields=${fields}`
     );
-
     const valid = (data.items || []).filter(
       item => item?.track?.uri?.startsWith('spotify:track:')
     );
     tracks.push(...valid.map(i => i.track));
     console.log(`[ReleaseRadar] Tracce caricate: ${tracks.length} / ${data.total}`);
-
     if (!data.next || offset + limit >= data.total) break;
     offset += limit;
   }
