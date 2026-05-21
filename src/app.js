@@ -9,6 +9,30 @@ import { showToast } from './ui/toast.js';
 
 console.log('[App] Release Radar Expander avviato — Fase 2');
 
+// ---- GitHub Pages SPA redirect fix ----
+// Il 404.html reindirizza /callback?code=X → /?p=%2Fcallback&q=code%3DX
+// Qui ricostruiamo URL e search originali prima di fare qualsiasi cosa.
+function restoreGitHubPagesRedirect() {
+  const search = window.location.search;
+  if (!search.includes('p=')) return; // non è un redirect dal 404
+
+  const params = new URLSearchParams(search);
+  const p = params.get('p') || '';
+  const q = params.get('q') || '';
+  const h = params.get('h') || '';
+
+  if (!p && !q) return;
+
+  // Ricostruisce il path e query originali
+  const newPath = window.location.pathname.replace(/\/$/, '') + p;
+  const newSearch = q ? '?' + decodeURIComponent(q) : '';
+  const newHash = h ? '#' + decodeURIComponent(h) : '';
+  const newUrl = newPath + newSearch + newHash;
+
+  console.log('[App] GitHub Pages redirect restore:', newUrl);
+  window.history.replaceState(null, '', newUrl);
+}
+
 // ---- Render: Loading ----
 
 function renderLoading(message = 'Caricamento...') {
@@ -99,7 +123,9 @@ async function loadUserProfile() {
 async function init() {
   await registerServiceWorker();
 
-  // Determina il path corrente (GitHub Pages serve da /release-radar-expander/)
+  // PRIMA: ripristina URL se siamo arrivati dal 404.html redirect
+  restoreGitHubPagesRedirect();
+
   const path = window.location.pathname;
   const isCallback = path.endsWith('/callback') || path.endsWith('/callback/');
 

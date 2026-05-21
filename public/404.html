@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script>
+    // GitHub Pages SPA fallback.
+    // Redirige /release-radar-expander/callback?code=... → /release-radar-expander/?p=/callback&q=code=...
+    // app.js poi legge il parametro e ricostruisce il flusso OAuth.
+    var seg = 1; // quanti segmenti del path conservare (1 = /release-radar-expander/)
+    var l = window.location;
+    var path = l.pathname.slice(1).split('/').slice(seg).join('/');
+    var query = l.search.slice(1);
+    var hash = l.hash.slice(1);
+    var redirect = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+      l.pathname.split('/').slice(0, 1 + seg).join('/') + '/?p=' +
+      encodeURIComponent('/' + path) +
+      (query ? '&q=' + encodeURIComponent(query) : '') +
+      (hash ? '&h=' + encodeURIComponent(hash) : '');
+    l.replace(redirect);
+  </script>
+</head>
+<body></body>
+</html>
