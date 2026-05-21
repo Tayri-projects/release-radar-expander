@@ -1,25 +1,29 @@
 /**
- * snapshotManager.js — gestione lifecycle snapshot settimanale
+ * snapshotManager.js — lifecycle snapshot settimanale
  *
- * All'apertura della PWA:
- * 1. Calcola la week key corrente (ultimo venerdì <= oggi)
- * 2. Se lo snapshot esiste già in localStorage → lo restituisce
- * 3. Se non esiste → lo crea chiamando Spotify API e lo salva
+ * Logica all'apertura:
+ *
+ * Esiste snapshot settimana corrente in localStorage?
+ * ├── SÌ  → restituisce quello, fine (non tocca la playlist sorgente)
+ * └── NO  → leggi playlist sorgente
+ *           ├── Ha tracce → genera snapshot → salva → restituisce (mostra UI)
+ *           │              → [background] svuota playlist sorgente
+ *           └── Vuota/errore → lancia RR_SOURCE_EMPTY
  */
 
-import { findReleaseRadar, fetchAllPlaylistTracks } from './releaseRadar.js';
+import { findOrCreateRRSource, fetchAllPlaylistTracks, clearRRSource } from './releaseRadar.js';
 import { buildSnapshot, getCurrentWeekKey } from './expander.js';
 import { getSnapshot, saveSnapshot } from '../auth/storage.js';
 
 /**
- * Carica lo snapshot della settimana corrente, creandolo se non esiste.
- * @param {function} onProgress - callback(message) per aggiornare la UI durante il caricamento
- * @returns {Promise<{snapshot: object, weekKey: string, fromCache: boolean}>}
+ * Carica lo snapshot della settimana corrente, creandolo se necessario.
+ * @param {function} onProgress - callback(message) per aggiornare la UI
+ * @returns {Promise<{snapshot, weekKey, fromCache}>}
  */
 export async function loadOrCreateCurrentSnapshot(onProgress = () => {}) {
   const weekKey = getCurrentWeekKey();
 
-  // Controlla cache
+  // Cache hit — restituisce subito senza toccare Spotify
   const cached = getSnapshot(weekKey);
   if (cached) {
     console.log(`[SnapshotManager] Snapshot ${weekKey} trovato in cache.`);
@@ -28,46 +32,71 @@ export async function loadOrCreateCurrentSnapshot(onProgress = () => {}) {
 
   console.log(`[SnapshotManager] Snapshot ${weekKey} non trovato, creo...`);
 
-  // Trova Release Radar
-  onProgress('Cerco la Release Radar...');
-  const radarInfo = await findReleaseRadar();
-  if (!radarInfo) {
-    throw new Error('RELEASE_RADAR_NOT_FOUND');
+  // Trova o crea la playlist sorgente
+  onProgress('Cerco la playlist sorgente...');
+  const source = await findOrCreateRRSource();
+
+  // Controlla che non sia vuota
+  if (source.total === 0) {
+    console.warn('[SnapshotManager] Playlist sorgente vuota.');
+    throw new Error('RR_SOURCE_EMPTY');
   }
 
   // Scarica tracce
   onProgress('Scarico le tracce...');
-  const rawTracks = await fetchAllPlaylistTracks(radarInfo.id);
+  const rawTracks = await fetchAllPlaylistTracks(source.id);
 
-  // Espandi
+  if (rawTracks.length === 0) {
+    console.warn('[SnapshotManager] Nessuna traccia valida nella playlist sorgente.');
+    throw new Error('RR_SOURCE_EMPTY');
+  }
+
+  // Espandi album
   onProgress('Espando gli album...');
-  const snapshot = await buildSnapshot(rawTracks, radarInfo.id);
+  const snapshot = await buildSnapshot(rawTracks, source.id);
 
-  // Salva
+  // Salva snapshot
   saveSnapshot(weekKey, snapshot);
-  console.log(`[SnapshotManager] Snapshot ${weekKey} creato e salvato.`);
+  console.log(`[SnapshotManager] Snapshot ${weekKey} salvato (${snapshot.items.length} items).`);
+
+  // Svuota playlist sorgente in background (fire and forget)
+  clearRRSource(source.id).catch(e =>
+    console.warn('[SnapshotManager] Svuotamento sorgente fallito (non bloccante):', e.message)
+  );
 
   return { snapshot, weekKey, fromCache: false };
 }
 
 /**
- * Forza la rigenerazione dello snapshot della settimana corrente
- * (utile per il bottone debug in Fase 3).
+ * Forza la rigenerazione dello snapshot della settimana corrente.
+ * Utile per rileggere la playlist sorgente se l'utente l'ha aggiornata.
  */
 export async function forceRefreshSnapshot(onProgress = () => {}) {
   const weekKey = getCurrentWeekKey();
   console.log(`[SnapshotManager] Forzo rigenerazione snapshot ${weekKey}...`);
 
-  onProgress('Cerco la Release Radar...');
-  const radarInfo = await findReleaseRadar();
-  if (!radarInfo) throw new Error('RELEASE_RADAR_NOT_FOUND');
+  onProgress('Cerco la playlist sorgente...');
+  const source = await findOrCreateRRSource();
+
+  if (source.total === 0) {
+    throw new Error('RR_SOURCE_EMPTY');
+  }
 
   onProgress('Scarico le tracce...');
-  const rawTracks = await fetchAllPlaylistTracks(radarInfo.id);
+  const rawTracks = await fetchAllPlaylistTracks(source.id);
+
+  if (rawTracks.length === 0) {
+    throw new Error('RR_SOURCE_EMPTY');
+  }
 
   onProgress('Espando gli album...');
-  const snapshot = await buildSnapshot(rawTracks, radarInfo.id);
+  const snapshot = await buildSnapshot(rawTracks, source.id);
 
   saveSnapshot(weekKey, snapshot);
+
+  clearRRSource(source.id).catch(e =>
+    console.warn('[SnapshotManager] Svuotamento sorgente fallito:', e.message)
+  );
+
   return { snapshot, weekKey, fromCache: false };
 }
