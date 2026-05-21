@@ -57,7 +57,9 @@ export async function findReleaseRadar() {
   try {
     console.log('[ReleaseRadar] Strategia 3: search (limit=10)...');
     const results = await spotifyFetch(`/search?q=Release+Radar&type=playlist&limit=10`);
-    for (const pl of (results?.playlists?.items || [])) {
+    const items = results?.playlists?.items || [];
+    console.log('[ReleaseRadar] Search risultati:', items.map(p => p ? `${p.name} | owner:${p.owner?.id} | id:${p.id}` : 'null'));
+    for (const pl of items) {
       if (!pl?.owner) continue;
       if (pl.name === 'Release Radar' && pl.owner.id === 'spotify') {
         console.log('[ReleaseRadar] Trovata via search:', pl.id);
