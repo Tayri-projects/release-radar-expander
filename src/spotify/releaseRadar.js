@@ -37,8 +37,7 @@ export async function findOrCreateRRSource() {
 
   // Non trovata — creala
   console.log(`[ReleaseRadar] Non trovata, creo "${RR_SOURCE_PLAYLIST_NAME}"...`);
-  const me = await spotifyFetch('/me');
-  const created = await spotifyFetch(`/users/${me.id}/playlists`, {
+  const created = await spotifyFetch(`/me/playlists`, {
     method: 'POST',
     body: JSON.stringify({
       name: RR_SOURCE_PLAYLIST_NAME,
