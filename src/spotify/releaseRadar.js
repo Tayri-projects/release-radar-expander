@@ -80,7 +80,8 @@ export async function fetchAllPlaylistTracks(playlistId) {
     const data = await spotifyFetch(
       `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}`
     );
-    console.log('[ReleaseRadar] Primo item raw:', JSON.stringify(data.items?.[0]?.track).slice(0, 300));
+    const first = data.items?.[0];
+    console.log('[ReleaseRadar] Primo item raw:', JSON.stringify({ track_uri: first?.track?.uri, track_type: first?.track?.type, item_keys: first ? Object.keys(first) : null }));
     const valid = (data.items || []).filter(
       item => item?.track?.uri?.startsWith('spotify:track:')
     );
