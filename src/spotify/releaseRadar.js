@@ -76,15 +76,11 @@ export async function fetchAllPlaylistTracks(playlistId) {
   let offset = 0;
   const limit = 100;
 
-  // album_group rimosso da API Feb 2026 — non incluso nei fields
-  const fields = encodeURIComponent(
-    'next,total,items(track(uri,id,name,duration_ms,track_number,artists(id,name),album(id,uri,name,album_type,total_tracks,images,artists(id,name))))'
-  );
-
   while (true) {
     const data = await spotifyFetch(
-      `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}&fields=${fields}`
+      `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}`
     );
+    console.log('[ReleaseRadar] Primo item raw:', JSON.stringify(data.items?.[0]?.track).slice(0, 300));
     const valid = (data.items || []).filter(
       item => item?.track?.uri?.startsWith('spotify:track:')
     );
