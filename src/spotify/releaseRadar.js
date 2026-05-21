@@ -1,107 +1,89 @@
 /**
  * getReleaseRadar — trova la playlist Release Radar e scarica tutte le tracce
  *
- * La Release Radar è una "Made For You" playlist — non appare in /me/playlists.
- * Spotify la espone tramite:
- *   GET /browse/featured-playlists  → no, sono featured generiche
- *   GET /me/playlists               → no, solo playlist seguite/create dall'utente
- *   GET /search                     → sì, ma filtrare per owner "spotify" non basta:
- *                                     i risultati possono contenere null
+ * La Release Radar è una "Made For You" playlist generata da Spotify.
+ * Non appare in /me/playlists come playlist normali.
  *
- * Strategia corretta (in ordine di affidabilità):
- * 1. Cerca nelle "Made For You" tramite /browse/categories/0JQ5IMCbf2HKiU6CvO3i5G/playlists
- *    (categoria "Made For You" ha ID fisso su Spotify)
- * 2. Fallback: search per "Release Radar" filtrando owner.id === "spotify"
- * 3. Fallback finale: cerca tra le playlist personali con nome == "Release Radar"
- *    (alcune versioni Spotify la aggiungono automaticamente alla libreria)
+ * Strategia definitiva (più robusta):
+ * 1. Prova a leggere direttamente l'ID noto dell'utente (hardcoded dopo discovery).
+ * 2. Se non funziona (token insufficiente, playlist rimossa), cerca via
+ *    /me/playlists e search come fallback.
+ *
+ * ID Release Radar dell'utente: 37i9dQZEVXbhvRdPuaKypU
+ * (ricavato dal link https://open.spotify.com/playlist/37i9dQZEVXbhvRdPuaKypU)
+ *
+ * NOTA: questo ID è stabile per un dato utente — Spotify non lo rigenera.
  */
 
 import { spotifyFetch } from '../auth/auth.js';
 
-// ID categoria "Made For You" — stabile su Spotify
-const MADE_FOR_YOU_CATEGORY_ID = '0JQ5IMCbf2HKiU6CvO3i5G';
+// ID Release Radar dell'utente (da open.spotify.com/playlist/...)
+const RELEASE_RADAR_ID = '37i9dQZEVXbhvRdPuaKypU';
 
 /**
- * Trova l'ID della Release Radar dell'utente.
+ * Trova la Release Radar. Prima prova l'ID diretto, poi fallback dinamici.
  * @returns {Promise<{id: string, name: string} | null>}
  */
 export async function findReleaseRadar() {
   console.log('[ReleaseRadar] Cerco la Release Radar...');
 
-  // --- Strategia 1: Made For You category playlists ---
+  // --- Strategia 1: ID diretto (hardcoded) ---
   try {
-    console.log('[ReleaseRadar] Strategia 1: Made For You category...');
-    let offset = 0;
-    const limit = 50;
-    while (true) {
-      const data = await spotifyFetch(
-        `/browse/categories/${MADE_FOR_YOU_CATEGORY_ID}/playlists?limit=${limit}&offset=${offset}&country=IT`
-      );
-      const items = data?.playlists?.items || [];
-      for (const pl of items) {
-        if (!pl) continue;
-        if (pl.name === 'Release Radar') {
-          console.log('[ReleaseRadar] Trovata via Made For You:', pl.id);
-          return { id: pl.id, name: pl.name };
-        }
-      }
-      const total = data?.playlists?.total || 0;
-      if (!data?.playlists?.next || offset + limit >= total) break;
-      offset += limit;
+    console.log('[ReleaseRadar] Strategia 1: accesso diretto per ID...');
+    const pl = await spotifyFetch(
+      `/playlists/${RELEASE_RADAR_ID}?fields=id,name,owner,snapshot_id,tracks.total`
+    );
+    if (pl?.id) {
+      console.log(`[ReleaseRadar] Trovata: "${pl.name}" (${pl.tracks.total} tracce)`);
+      return { id: pl.id, name: pl.name };
     }
   } catch (e) {
     console.warn('[ReleaseRadar] Strategia 1 fallita:', e.message);
   }
 
-  // --- Strategia 2: search API (con guard su null) ---
+  // --- Strategia 2: /me/playlists ---
   try {
-    console.log('[ReleaseRadar] Strategia 2: search API...');
-    const results = await spotifyFetch(
-      `/search?q=Release+Radar&type=playlist&limit=50`
-    );
-    const items = results?.playlists?.items || [];
-    for (const pl of items) {
-      if (!pl || !pl.owner) continue; // guard su null
-      if (pl.name === 'Release Radar' && pl.owner.id === 'spotify') {
-        console.log('[ReleaseRadar] Trovata via search:', pl.id);
-        return { id: pl.id, name: pl.name };
-      }
-    }
-  } catch (e) {
-    console.warn('[ReleaseRadar] Strategia 2 fallita:', e.message);
-  }
-
-  // --- Strategia 3: /me/playlists (alcune versioni Spotify la sincronizzano) ---
-  try {
-    console.log('[ReleaseRadar] Strategia 3: /me/playlists...');
+    console.log('[ReleaseRadar] Strategia 2: /me/playlists...');
     let offset = 0;
-    const limit = 50;
     while (true) {
-      const data = await spotifyFetch(`/me/playlists?limit=${limit}&offset=${offset}`);
-      const items = data?.items || [];
-      console.log(`[ReleaseRadar] Playlist personali: ${offset + items.length} / ${data.total}`);
-      for (const pl of items) {
+      const data = await spotifyFetch(`/me/playlists?limit=50&offset=${offset}`);
+      for (const pl of (data?.items || [])) {
         if (!pl) continue;
         if (pl.name === 'Release Radar') {
           console.log('[ReleaseRadar] Trovata in /me/playlists:', pl.id);
           return { id: pl.id, name: pl.name };
         }
       }
-      if (!data.next || offset + limit >= data.total) break;
-      offset += limit;
+      if (!data.next || offset + 50 >= data.total) break;
+      offset += 50;
+    }
+  } catch (e) {
+    console.warn('[ReleaseRadar] Strategia 2 fallita:', e.message);
+  }
+
+  // --- Strategia 3: search API ---
+  try {
+    console.log('[ReleaseRadar] Strategia 3: search...');
+    const results = await spotifyFetch(`/search?q=Release+Radar&type=playlist&limit=50`);
+    for (const pl of (results?.playlists?.items || [])) {
+      if (!pl?.owner) continue;
+      if (pl.name === 'Release Radar' && pl.owner.id === 'spotify') {
+        console.log('[ReleaseRadar] Trovata via search:', pl.id);
+        return { id: pl.id, name: pl.name };
+      }
     }
   } catch (e) {
     console.warn('[ReleaseRadar] Strategia 3 fallita:', e.message);
   }
 
-  console.error('[ReleaseRadar] Release Radar non trovata con nessuna strategia.');
+  console.error('[ReleaseRadar] Release Radar non trovata.');
   return null;
 }
 
 /**
  * Scarica TUTTE le tracce della playlist (gestisce paginazione).
  * @param {string} playlistId
- * @returns {Promise<Array>} array di track objects Spotify
+ * @returns {Promise<Array>}
  */
 export async function fetchAllPlaylistTracks(playlistId) {
   console.log('[ReleaseRadar] Scarico tracce della playlist:', playlistId);
@@ -119,17 +101,16 @@ export async function fetchAllPlaylistTracks(playlistId) {
       `/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&fields=${fields}`
     );
 
-    const validItems = (data.items || []).filter(
+    const valid = (data.items || []).filter(
       item => item?.track?.uri?.startsWith('spotify:track:')
     );
-
-    tracks.push(...validItems.map(item => item.track));
+    tracks.push(...valid.map(i => i.track));
     console.log(`[ReleaseRadar] Tracce caricate: ${tracks.length} / ${data.total}`);
 
     if (!data.next || offset + limit >= data.total) break;
     offset += limit;
   }
 
-  console.log(`[ReleaseRadar] Totale tracce scaricate: ${tracks.length}`);
+  console.log(`[ReleaseRadar] Totale: ${tracks.length} tracce`);
   return tracks;
 }
