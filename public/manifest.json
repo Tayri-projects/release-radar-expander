@@ -1,0 +1,26 @@
+{
+  "name": "Release Radar Expander",
+  "short_name": "Release Radar",
+  "description": "Espandi i tuoi album Release Radar e ascoltali per intero ogni venerdì.",
+  "start_url": "/release-radar-expander/",
+  "scope": "/release-radar-expander/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    {
+      "src": "/release-radar-expander/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/release-radar-expander/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
