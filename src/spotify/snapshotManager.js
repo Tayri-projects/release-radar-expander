@@ -36,13 +36,7 @@ export async function loadOrCreateCurrentSnapshot(onProgress = () => {}) {
   onProgress('Cerco la playlist sorgente...');
   const source = await findOrCreateRRSource();
 
-  // Controlla che non sia vuota
-  if (source.total === 0) {
-    console.warn('[SnapshotManager] Playlist sorgente vuota.');
-    throw new Error('RR_SOURCE_EMPTY');
-  }
-
-  // Scarica tracce
+  // Scarica tracce (non ci fidiamo di source.total — /me/playlists non lo restituisce sempre)
   onProgress('Scarico le tracce...');
   const rawTracks = await fetchAllPlaylistTracks(source.id);
 
@@ -78,10 +72,7 @@ export async function forceRefreshSnapshot(onProgress = () => {}) {
   onProgress('Cerco la playlist sorgente...');
   const source = await findOrCreateRRSource();
 
-  if (source.total === 0) {
-    throw new Error('RR_SOURCE_EMPTY');
-  }
-
+  // Scarica tracce (non ci fidiamo di source.total — /me/playlists non lo restituisce sempre)
   onProgress('Scarico le tracce...');
   const rawTracks = await fetchAllPlaylistTracks(source.id);
 
