@@ -76,16 +76,31 @@ export async function fetchAllPlaylistTracks(playlistId) {
   let offset = 0;
   const limit = 100;
 
+  // Spotify ha ridenominato la chiave da `track` a `item` sull'endpoint /items.
+  // Con la projection `fields=items(track(...))` Spotify rimappa la risposta
+  // usando ancora `track`, ma per robustezza leggiamo anche `.item` come fallback.
+  // Nota: album_group rimosso da Feb 2026 — non incluso nei fields.
+  const fields = encodeURIComponent(
+    'next,total,items(track(uri,id,name,duration_ms,track_number,artists(id,name),album(id,uri,name,album_type,total_tracks,images,artists(id,name))),item(uri,id,name,duration_ms,track_number,artists(id,name),album(id,uri,name,album_type,total_tracks,images,artists(id,name))))'
+  );
+
   while (true) {
     const data = await spotifyFetch(
-      `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}`
+      `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}&fields=${fields}`
     );
     const first = data.items?.[0];
-    console.log('[ReleaseRadar] Primo item raw:', JSON.stringify({ track_uri: first?.track?.uri, track_type: first?.track?.type, item_keys: first ? Object.keys(first) : null }));
-    const valid = (data.items || []).filter(
-      item => item?.track?.uri?.startsWith('spotify:track:')
-    );
-    tracks.push(...valid.map(i => i.track));
+    console.log('[ReleaseRadar] Primo item raw:', JSON.stringify({
+      track_uri: first?.track?.uri,
+      item_uri: first?.item?.uri,
+      item_keys: first ? Object.keys(first) : null,
+    }));
+
+    // Normalizza: prendi .track se presente, altrimenti .item
+    const normalized = (data.items || [])
+      .map(it => it?.track ?? it?.item)
+      .filter(t => t?.uri?.startsWith('spotify:track:'));
+
+    tracks.push(...normalized);
     console.log(`[ReleaseRadar] Tracce caricate: ${tracks.length} / ${data.total}`);
     if (!data.next || offset + limit >= data.total) break;
     offset += limit;
