@@ -166,54 +166,43 @@ body {
 .btn-generate:active { transform: scale(.97); }
 
 /* =============================================
-   HOME — PLAYLIST HEADER (stile mockup ref3)
+   HOME — HEADER (stile mockup: pill data + titolo enorme)
    ============================================= */
 .home-screen { display: flex; flex-direction: column; min-height: 100dvh; }
 
-/* Mosaic cover 2x2 */
 .playlist-header {
-  position: relative;
-  padding: 0 0 20px;
-}
-.playlist-cover-mosaic {
-  width: 100%; aspect-ratio: 1;
-  display: grid; grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  overflow: hidden;
-  background: var(--bg-elevated);
-}
-.playlist-cover-mosaic img {
-  width: 100%; height: 100%; object-fit: cover; display: block;
-}
-.playlist-cover-mosaic .mosaic-single {
-  grid-column: 1 / -1; grid-row: 1 / -1;
+  padding: 20px 16px 0;
 }
 
-.playlist-meta {
-  padding: 16px 16px 0;
-}
-
-/* Navigazione settimana */
+/* Navigazione settimana — pill centrata */
 .week-nav {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 0;
+  margin-bottom: 20px;
+  background: var(--bg-elevated);
+  border-radius: var(--r-full);
+  align-self: flex-start;
+  width: fit-content;
+  overflow: hidden;
 }
 .week-nav-btn {
   background: none; border: none; color: var(--text-secondary);
-  cursor: pointer; padding: 4px; border-radius: var(--r-full);
-  display: flex; align-items: center; transition: color .15s;
+  cursor: pointer; padding: 8px 12px;
+  display: flex; align-items: center; transition: color .15s, background .15s;
 }
-.week-nav-btn:hover:not(:disabled) { color: var(--text-primary); }
+.week-nav-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-highlight); }
 .week-nav-btn:disabled { opacity: .3; cursor: default; }
 .week-date {
-  font-size: .85rem; color: var(--text-secondary); font-weight: 500;
+  font-size: .83rem; color: var(--text-primary); font-weight: 500;
+  padding: 0 4px;
+  white-space: nowrap;
 }
 
-/* Titolo principale — grande e bold come nel mockup */
+/* Titolo principale — enorme e bold come nel mockup */
 .playlist-title {
-  font-size: 2.4rem; font-weight: 900;
-  letter-spacing: -1px; line-height: 1;
-  margin-bottom: 8px;
+  font-size: 3rem; font-weight: 900;
+  letter-spacing: -1.5px; line-height: 1;
+  margin-bottom: 12px;
+  word-break: break-word;
 }
 .playlist-duration {
   font-size: .85rem; color: var(--text-secondary);
@@ -221,13 +210,14 @@ body {
   background: var(--bg-surface);
   display: inline-block;
   padding: 4px 12px; border-radius: var(--r-full);
+  margin-bottom: 4px;
 }
 
 /* =============================================
    HOME — AZIONI (download + play/shuffle)
    ============================================= */
 .playlist-actions {
-  padding: 12px 16px 4px;
+  padding: 16px 16px 4px;
   display: flex; flex-direction: column; gap: 12px;
 }
 .action-downloads {
@@ -347,6 +337,126 @@ body {
 .empty-list {
   color: var(--text-subdued); font-size: .875rem;
   text-align: center; padding: 40px 16px;
+}
+
+/* =============================================
+   HOME — SETTIMANA SENZA SNAPSHOT
+   ============================================= */
+.empty-week {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 60px 32px;
+  gap: 12px; text-align: center;
+  flex: 1;
+}
+.empty-week-icon { font-size: 3rem; }
+.empty-week-msg {
+  font-size: 1rem; font-weight: 600;
+  color: var(--text-primary);
+}
+.empty-week-sub {
+  font-size: .85rem; color: var(--text-subdued);
+}
+
+/* =============================================
+   ALBUM DETAIL
+   ============================================= */
+.album-detail-screen {
+  display: flex; flex-direction: column;
+  min-height: 100dvh;
+}
+
+.album-detail-topbar {
+  display: flex; align-items: center;
+  padding: 16px 12px 8px;
+}
+
+.btn-back {
+  background: none; border: none;
+  color: var(--text-primary); cursor: pointer;
+  padding: 6px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.btn-back:hover { background: var(--bg-elevated); }
+
+.album-detail-cover-wrap {
+  width: 100%;
+  padding: 0 24px 20px;
+}
+.album-detail-cover {
+  width: 100%; aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  display: block;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+}
+
+.album-detail-meta {
+  padding: 0 20px 16px;
+}
+.album-detail-title {
+  font-size: 1.5rem; font-weight: 800;
+  letter-spacing: -.5px; line-height: 1.2;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+.album-detail-artist {
+  font-size: .9rem; font-weight: 600;
+  color: var(--text-secondary); margin-bottom: 6px;
+}
+.album-detail-info {
+  font-size: .78rem; color: var(--text-subdued);
+}
+
+.album-detail-actions {
+  display: flex; align-items: center; gap: 16px;
+  justify-content: flex-end;
+  padding: 4px 20px 16px;
+}
+.album-shuffle {
+  color: var(--text-secondary);
+}
+
+/* Tracklist album */
+.album-tracklist {
+  flex: 1;
+  padding: 0 0 80px;
+}
+.album-track-row {
+  display: flex; align-items: center;
+  gap: 12px; padding: 12px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background .15s;
+}
+.album-track-row:last-child { border-bottom: none; }
+.album-track-row:hover { background: var(--bg-surface); }
+
+.album-track-num {
+  font-size: .8rem; color: var(--text-subdued);
+  min-width: 20px; text-align: right;
+  flex-shrink: 0;
+}
+.album-track-info {
+  flex: 1; min-width: 0;
+}
+.album-track-name {
+  font-size: .88rem; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.album-track-artist {
+  font-size: .75rem; color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.album-track-dur {
+  font-size: .78rem; color: var(--text-subdued);
+  flex-shrink: 0;
+}
+
+.album-detail-footer {
+  height: env(safe-area-inset-bottom, 16px);
 }
 
 /* =============================================

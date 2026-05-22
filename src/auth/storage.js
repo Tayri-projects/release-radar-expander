@@ -78,3 +78,25 @@ export function saveSnapshot(weekKey, snapshot) {
 export function getAllSnapshotKeys() {
   return Object.keys(load().snapshots || {}).sort().reverse();
 }
+
+// ---- Expanded Playlist ----
+
+/**
+ * Legge l'ID della playlist destinazione "_Release Radar Espansa".
+ * Salvato dopo la prima creazione per evitare di ricercarla per nome ogni volta.
+ * @returns {string|null}
+ */
+export function getExpandedPlaylistId() {
+  return load().expanded_playlist_id || null;
+}
+
+/**
+ * Salva l'ID della playlist destinazione.
+ * @param {string} id
+ */
+export function saveExpandedPlaylistId(id) {
+  const data = load();
+  data.expanded_playlist_id = id;
+  save(data);
+  console.log('[Storage] ID playlist espansa salvato:', id);
+}

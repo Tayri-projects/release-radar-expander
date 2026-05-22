@@ -7,6 +7,7 @@ import { getAuth, clearAuth, isTokenExpired, getAllSnapshotKeys, getSnapshot } f
 import { showToast } from './ui/toast.js';
 import { loadOrCreateCurrentSnapshot, forceRefreshSnapshot } from './spotify/snapshotManager.js';
 import { getCurrentWeekKey } from './spotify/expander.js';
+import { writeExpandedPlaylist } from './spotify/playlistWriter.js';
 import { RR_SOURCE_PLAYLIST_NAME } from './auth/config.js';
 
 console.log('[App] Release Radar Expander avviato');
@@ -40,17 +41,14 @@ function formatDuration(totalMs) {
 function formatWeekLabel(weekKey) {
   // "2026-05-15" → "Friday, 15 May"
   const d = new Date(weekKey + 'T12:00:00');
-  return d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-function getPreviousSnapshot() {
-  const currentKey = getCurrentWeekKey();
-  const keys = getAllSnapshotKeys()
-    .filter(k => k !== currentKey)
-    .sort()
-    .reverse();
-  if (keys.length === 0) return null;
-  return { snapshot: getSnapshot(keys[0]), weekKey: keys[0] };
+function formatTrackDuration(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 // ---- Render: Loading ----
@@ -91,7 +89,6 @@ function renderLoginScreen() {
 }
 
 // ---- Render: Schermata procedura guidata ----
-// Mostrata quando la playlist sorgente è vuota e non c'è snapshot corrente
 
 function renderSetupScreen(user) {
   document.getElementById('app').innerHTML = `
@@ -179,31 +176,22 @@ function renderHome(user, snapshot, weekKey, fromCache) {
 
   const weekLabel = formatWeekLabel(weekKey);
 
-  // URI per la playlist espansa (bottone play)
-  // Costruita con tutti gli URI nell'ordine espanso
-  const allUris = buildExpandedUris(allItems, 'all');
-
   document.getElementById('app').innerHTML = `
     <div class="home-screen">
 
       <!-- Header -->
       <div class="playlist-header">
-        <div class="playlist-cover-mosaic" id="cover-mosaic">
-          ${buildCoverMosaic(allItems)}
+        <div class="week-nav">
+          <button class="week-nav-btn" id="prev-week-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="week-date" id="week-date-label">${weekLabel}</span>
+          <button class="week-nav-btn" id="next-week-btn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
         </div>
-        <div class="playlist-meta">
-          <div class="week-nav">
-            <button class="week-nav-btn" id="prev-week-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <span class="week-date" id="week-date-label">${weekLabel}</span>
-            <button class="week-nav-btn" id="next-week-btn" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-          <h1 class="playlist-title">Release Radar</h1>
-          <p class="playlist-duration">${formatDuration(totalMs)}</p>
-        </div>
+        <h1 class="playlist-title">Release Radar</h1>
+        <p class="playlist-duration">${formatDuration(totalMs)}</p>
       </div>
 
       <!-- Azioni -->
@@ -262,7 +250,7 @@ function renderHome(user, snapshot, weekKey, fromCache) {
       document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       document.getElementById('track-list').innerHTML = renderTrackList(allItems, currentFilter);
-      attachTrackListeners(allItems);
+      attachTrackListeners(allItems, user, snapshot, weekKey, () => currentFilter);
     });
   });
 
@@ -304,7 +292,134 @@ function renderHome(user, snapshot, weekKey, fromCache) {
     }
   });
 
-  attachTrackListeners(allItems);
+  attachTrackListeners(allItems, user, snapshot, weekKey, () => currentFilter);
+}
+
+// ---- Render: Album Detail ----
+
+function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter) {
+  const a = albumItem.album;
+  const typeLabel = a.type === 'compilation' ? 'Compilation' : a.type === 'single' ? 'EP' : 'Album';
+
+  document.getElementById('app').innerHTML = `
+    <div class="album-detail-screen">
+      <div class="album-detail-topbar">
+        <button class="btn-back" id="back-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="22" height="22"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+      </div>
+
+      <div class="album-detail-cover-wrap">
+        <img class="album-detail-cover" src="${a.cover || ''}" alt="${escHtml(a.name)}" onerror="this.style.background='var(--bg-elevated)'">
+      </div>
+
+      <div class="album-detail-meta">
+        <h2 class="album-detail-title">${escHtml(a.name)}</h2>
+        <p class="album-detail-artist">${escHtml(a.artists.map(x => x.name).join(', '))}</p>
+        <p class="album-detail-info">${typeLabel} · ${a.tracks_ordered.length} tracce · ${formatDuration(a.total_duration_ms)}</p>
+      </div>
+
+      <div class="album-detail-actions">
+        <button class="btn-shuffle album-shuffle" id="album-shuffle-btn" title="Shuffle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+        </button>
+        <button class="btn-play-main" id="album-play-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+      </div>
+
+      <div class="album-tracklist">
+        ${a.tracks_ordered.map((t, idx) => `
+          <div class="album-track-row">
+            <span class="album-track-num">${idx + 1}</span>
+            <div class="album-track-info">
+              <p class="album-track-name">${escHtml(t.name)}</p>
+              <p class="album-track-artist">${escHtml(t.artists.map(x => x.name).join(', '))}</p>
+            </div>
+            <span class="album-track-dur">${formatTrackDuration(t.duration_ms)}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="album-detail-footer"></div>
+    </div>
+  `;
+
+  // Back
+  document.getElementById('back-btn').addEventListener('click', () => {
+    renderHome(user, snapshot, weekKey, true);
+  });
+
+  // Play album — usa il filtro corrente della home
+  document.getElementById('album-play-btn').addEventListener('click', () => {
+    const filter = getCurrentFilter();
+    const uris = buildExpandedUris(snapshot.items, filter);
+    if (uris.length === 0) { showToast('Nessuna traccia da riprodurre.', 'error'); return; }
+    handlePlay(uris, false);
+  });
+
+  // Shuffle album
+  document.getElementById('album-shuffle-btn').addEventListener('click', () => {
+    const filter = getCurrentFilter();
+    const uris = buildExpandedUris(snapshot.items, filter);
+    if (uris.length === 0) { showToast('Nessuna traccia da riprodurre.', 'error'); return; }
+    handlePlay(uris, true);
+  });
+}
+
+// ---- Render: Settimana senza snapshot ----
+
+function renderEmptyWeek(user, weekKey, allKeys, currentIdx) {
+  const weekLabel = formatWeekLabel(weekKey);
+  document.getElementById('app').innerHTML = `
+    <div class="home-screen">
+      <div class="playlist-header">
+        <div class="week-nav">
+          <button class="week-nav-btn" id="prev-week-btn" ${currentIdx <= 0 ? 'disabled' : ''}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="week-date">${weekLabel}</span>
+          <button class="week-nav-btn" id="next-week-btn" ${currentIdx >= allKeys.length - 1 ? 'disabled' : ''}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <h1 class="playlist-title">Release Radar</h1>
+      </div>
+      <div class="empty-week">
+        <p class="empty-week-icon">📭</p>
+        <p class="empty-week-msg">Nessuno snapshot per questa settimana.</p>
+        <p class="empty-week-sub">Usa le frecce per navigare ad altre settimane.</p>
+      </div>
+      <div class="footer-actions">
+        <button class="btn-text-sm" id="logout-btn">Esci</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    clearAuth();
+    renderLoginScreen();
+  });
+
+  const prevBtn = document.getElementById('prev-week-btn');
+  const nextBtn = document.getElementById('next-week-btn');
+
+  if (prevBtn && !prevBtn.disabled) {
+    prevBtn.addEventListener('click', () => {
+      const prevKey = allKeys[currentIdx - 1];
+      const prevSnap = getSnapshot(prevKey);
+      if (prevSnap) renderHome(user, prevSnap, prevKey, true);
+      else renderEmptyWeek(user, prevKey, allKeys, currentIdx - 1);
+    });
+  }
+  if (nextBtn && !nextBtn.disabled) {
+    nextBtn.addEventListener('click', () => {
+      const nextKey = allKeys[currentIdx + 1];
+      const nextSnap = getSnapshot(nextKey);
+      if (nextSnap) renderHome(user, nextSnap, nextKey, true);
+      else renderEmptyWeek(user, nextKey, allKeys, currentIdx + 1);
+    });
+  }
 }
 
 // ---- Track list rendering ----
@@ -348,12 +463,17 @@ function renderTrackList(items, filter) {
   }).join('');
 }
 
-function attachTrackListeners(items) {
-  // Tap su riga album → espandi tracklist inline (futuro)
+function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) {
+  // Tap su riga album → apri album detail
   document.querySelectorAll('.album-row').forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('.btn-more')) return;
-      // TODO Fase 4: toggle tracklist inline
+      const idx = parseInt(row.dataset.idx, 10);
+      const filtered = filterItems(items, getCurrentFilter());
+      const item = filtered[idx];
+      if (item && item.type === 'album_expansion') {
+        renderAlbumDetail(item, user, snapshot, weekKey, getCurrentFilter);
+      }
     });
   });
 }
@@ -381,26 +501,60 @@ function buildExpandedUris(items, filter) {
   return uris;
 }
 
-function buildCoverMosaic(items) {
-  // Prime 4 cover uniche
-  const covers = [];
-  for (const item of items) {
-    const url = item.type === 'single' ? item.track.album_cover : item.album.cover;
-    if (url && !covers.includes(url)) covers.push(url);
-    if (covers.length >= 4) break;
-  }
-  if (covers.length === 0) return '';
-  if (covers.length < 4) {
-    return `<img src="${covers[0]}" alt="" class="mosaic-single" onerror="this.style.background='var(--bg-elevated)'">`;
-  }
-  return covers.map(u => `<img src="${u}" alt="" onerror="this.style.background='var(--bg-elevated)'">`).join('');
-}
+// ---- Play ----
+
+let playInProgress = false;
 
 async function handlePlay(uris, shuffle) {
-  // Fase 4: scriverà la playlist _Release Radar Espansa e aprirà Spotify
-  // Per ora: deep link diretto alla playlist sorgente come placeholder
-  showToast('Play — funzione in arrivo nella Fase 4', 'info', 3000);
+  if (playInProgress) {
+    showToast('Play già in corso...', 'info', 2000);
+    return;
+  }
+  playInProgress = true;
+  console.log(`[App] handlePlay: ${uris.length} URI, shuffle=${shuffle}`);
+
+  // Mostra toast di avanzamento
+  showToast('Preparo la playlist...', 'info', 30000);
+
+  try {
+    const playlistId = await writeExpandedPlaylist(uris, (msg) => {
+      console.log('[App] Play progress:', msg);
+      // Aggiorna il toast se ancora visibile
+      const toast = document.querySelector('.toast.info');
+      if (toast) toast.textContent = msg;
+    });
+
+    console.log('[App] Playlist scritta, apro Spotify:', playlistId);
+
+    // Chiudi il toast di avanzamento
+    const infoToast = document.querySelector('.toast.info');
+    if (infoToast) infoToast.style.animation = 'none', infoToast.remove();
+
+    showToast('Playlist pronta ✓', 'info', 2000);
+
+    // Deep link Spotify — apre l'app sulla playlist
+    const deepLink = `spotify:playlist:${playlistId}`;
+    console.log('[App] Deep link:', deepLink);
+    window.location.href = deepLink;
+
+  } catch (e) {
+    console.error('[App] Errore durante play:', e);
+    const infoToast = document.querySelector('.toast.info');
+    if (infoToast) infoToast.remove();
+
+    if (e.message === 'AUTH_EXPIRED') {
+      clearAuth();
+      showToast('Sessione scaduta. Accedi di nuovo.', 'error', 4000);
+      renderLoginScreen();
+    } else {
+      showToast('Errore durante la scrittura della playlist.', 'error', 4000);
+    }
+  } finally {
+    playInProgress = false;
+  }
 }
+
+// ---- Week nav ----
 
 function setupWeekNav(user, currentWeekKey) {
   const allKeys = getAllSnapshotKeys ? getAllSnapshotKeys().sort() : [];
@@ -415,7 +569,11 @@ function setupWeekNav(user, currentWeekKey) {
       if (currentIdx > 0) {
         const prevKey = allKeys[currentIdx - 1];
         const prevSnap = getSnapshot(prevKey);
-        if (prevSnap) renderHome(user, prevSnap, prevKey, true);
+        if (prevSnap) {
+          renderHome(user, prevSnap, prevKey, true);
+        } else {
+          renderEmptyWeek(user, prevKey, allKeys, currentIdx - 1);
+        }
       }
     });
   }
@@ -426,7 +584,11 @@ function setupWeekNav(user, currentWeekKey) {
       if (currentIdx < allKeys.length - 1) {
         const nextKey = allKeys[currentIdx + 1];
         const nextSnap = getSnapshot(nextKey);
-        if (nextSnap) renderHome(user, nextSnap, nextKey, true);
+        if (nextSnap) {
+          renderHome(user, nextSnap, nextKey, true);
+        } else {
+          renderEmptyWeek(user, nextKey, allKeys, currentIdx + 1);
+        }
       }
     });
   }
