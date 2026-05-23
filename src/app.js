@@ -39,7 +39,6 @@ function formatDuration(totalMs) {
 }
 
 function formatWeekLabel(weekKey) {
-  // "2026-05-15" → "Friday, 15 May"
   const d = new Date(weekKey + 'T12:00:00');
   return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 }
@@ -106,7 +105,7 @@ function renderSetupScreen(user) {
       <div class="setup-content">
         <div class="setup-radar-icon">
           <svg viewBox="0 0 24 24" fill="currentColor" width="48" height="48" opacity="0.3">
-            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0z"/>
           </svg>
         </div>
 
@@ -130,7 +129,7 @@ function renderSetupScreen(user) {
 
         <a class="btn-spotify-open" href="spotify:playlist:37i9dQZEVXbhvRdPuaKypU" target="_blank">
           <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0z"/>
           </svg>
           Apri Release Radar su Spotify
         </a>
@@ -179,7 +178,6 @@ function renderHome(user, snapshot, weekKey, fromCache) {
   document.getElementById('app').innerHTML = `
     <div class="home-screen">
 
-      <!-- Header -->
       <div class="playlist-header">
         <div class="week-nav">
           <button class="week-nav-btn" id="prev-week-btn">
@@ -194,7 +192,6 @@ function renderHome(user, snapshot, weekKey, fromCache) {
         <p class="playlist-duration">${formatDuration(totalMs)}</p>
       </div>
 
-      <!-- Azioni -->
       <div class="playlist-actions">
         <div class="action-main-row">
           <div class="action-downloads">
@@ -222,19 +219,16 @@ function renderHome(user, snapshot, weekKey, fromCache) {
         </div>
       </div>
 
-      <!-- Filtri -->
       <div class="filter-chips">
         <button class="chip active" data-filter="all">Tutto</button>
         <button class="chip" data-filter="singles">Solo Singoli</button>
         <button class="chip" data-filter="albums">Solo Album</button>
       </div>
 
-      <!-- Lista -->
       <div class="track-list" id="track-list">
         ${renderTrackList(allItems, 'all')}
       </div>
 
-      <!-- Logout nascosto in fondo -->
       <div class="footer-actions">
         <button class="btn-text-sm" id="logout-btn">Esci</button>
         <button class="btn-text-sm" id="refresh-btn">↺ Ricarica</button>
@@ -242,10 +236,8 @@ function renderHome(user, snapshot, weekKey, fromCache) {
     </div>
   `;
 
-  // Stato filtro corrente
   let currentFilter = 'all';
 
-  // Filtri
   document.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
       currentFilter = chip.dataset.filter;
@@ -256,24 +248,20 @@ function renderHome(user, snapshot, weekKey, fromCache) {
     });
   });
 
-  // Play
   document.getElementById('play-btn').addEventListener('click', () => {
     const uris = buildExpandedUris(allItems, currentFilter);
     if (uris.length === 0) { showToast('Nessuna traccia da riprodurre.', 'error'); return; }
     handlePlay(uris, false);
   });
 
-  // Shuffle
   document.getElementById('shuffle-btn').addEventListener('click', () => {
     const uris = buildExpandedUris(allItems, currentFilter);
     if (uris.length === 0) { showToast('Nessuna traccia da riprodurre.', 'error'); return; }
     handlePlay(uris, true);
   });
 
-  // Nav settimana
   setupWeekNav(user, weekKey);
 
-  // Logout / Refresh
   document.getElementById('logout-btn').addEventListener('click', () => {
     clearAuth();
     renderLoginScreen();
@@ -347,12 +335,10 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
     </div>
   `;
 
-  // Back
   document.getElementById('back-btn').addEventListener('click', () => {
     renderHome(user, snapshot, weekKey, true);
   });
 
-  // Play album — usa il filtro corrente della home
   document.getElementById('album-play-btn').addEventListener('click', () => {
     const filter = getCurrentFilter();
     const uris = buildExpandedUris(snapshot.items, filter);
@@ -360,7 +346,6 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
     handlePlay(uris, false);
   });
 
-  // Shuffle album
   document.getElementById('album-shuffle-btn').addEventListener('click', () => {
     const filter = getCurrentFilter();
     const uris = buildExpandedUris(snapshot.items, filter);
@@ -466,7 +451,6 @@ function renderTrackList(items, filter) {
 }
 
 function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) {
-  // Tap su riga album → apri album detail
   document.querySelectorAll('.album-row').forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('.btn-more')) return;
@@ -479,7 +463,6 @@ function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) 
     });
   });
 
-  // Tap su riga singolo → avvia riproduzione del singolo
   document.querySelectorAll('.single-row').forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('.btn-more')) return;
@@ -493,7 +476,6 @@ function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) 
     });
   });
 
-  // Menu 3 puntini — singoli
   document.querySelectorAll('.single-row .btn-more').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -506,7 +488,6 @@ function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) 
     });
   });
 
-  // Menu 3 puntini — album
   document.querySelectorAll('.album-row .btn-more').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -541,39 +522,18 @@ function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurre
         </div>
       </div>
       <div class="context-divider"></div>
-      <button class="context-item" data-action="share">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        <span>Condividi</span>
-      </button>
-      <button class="context-item" data-action="remove">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-        <span>Rimuovi dallo snapshot</span>
-      </button>
-      <button class="context-item" data-action="queue">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-        <span>Aggiungi alla coda</span>
-      </button>
-      ${artistId ? `
-      <button class="context-item" data-action="artist">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <span>Vai all'artista</span>
-      </button>` : ''}
-      <button class="context-item" data-action="credits">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span>Crediti canzone</span>
-      </button>
+      <button class="context-item" data-action="share"><span>Condividi</span></button>
+      <button class="context-item" data-action="remove"><span>Rimuovi dallo snapshot</span></button>
+      <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
+      ${artistId ? `<button class="context-item" data-action="artist"><span>Vai all'artista</span></button>` : ''}
+      <button class="context-item" data-action="credits"><span>Crediti canzone</span></button>
     </div>
   `;
 
   document.body.appendChild(sheet);
-
-  // Animazione entrata
   requestAnimationFrame(() => sheet.classList.add('open'));
-
-  // Chiudi su backdrop click
   sheet.querySelector('.context-backdrop').addEventListener('click', dismissContextMenu);
 
-  // Azioni
   sheet.querySelectorAll('.context-item').forEach(btn => {
     btn.addEventListener('click', async () => {
       const action = btn.dataset.action;
@@ -584,12 +544,8 @@ function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurre
         if (navigator.share) {
           try { await navigator.share({ title: track.name, url }); } catch (_) {}
         } else {
-          try {
-            await navigator.clipboard.writeText(url);
-            showToast('Link copiato ✓');
-          } catch (_) {
-            showToast('Link: ' + url, 'info', 5000);
-          }
+          try { await navigator.clipboard.writeText(url); showToast('Link copiato ✓'); }
+          catch (_) { showToast('Link: ' + url, 'info', 5000); }
         }
       }
 
@@ -606,7 +562,6 @@ function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurre
         } catch (e) {
           console.error('[App] Errore add to queue:', e);
           if (e.message === 'SPOTIFY_API_ERROR_404') {
-            // 404 = nessun dispositivo attivo su Spotify
             showToast('Nessun dispositivo attivo. Avvia Spotify su un dispositivo e riprova.', 'error', 5000);
           } else if (e.message === 'SPOTIFY_API_ERROR_403') {
             showToast('Permesso negato. Rieffettua il login.', 'error', 4000);
@@ -616,13 +571,8 @@ function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurre
         }
       }
 
-      if (action === 'artist' && artistId) {
-        window.open(`spotify:artist:${artistId}`, '_blank');
-      }
-
-      if (action === 'credits') {
-        showTrackCredits(track);
-      }
+      if (action === 'artist' && artistId) { window.open(`spotify:artist:${artistId}`, '_blank'); }
+      if (action === 'credits') { showTrackCredits(track); }
     });
   });
 }
@@ -646,29 +596,15 @@ function showAlbumContextMenu(item, snapshot, weekKey, user, allItems, getCurren
         </div>
       </div>
       <div class="context-divider"></div>
-      <button class="context-item" data-action="share">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-        <span>Condividi album</span>
-      </button>
-      <button class="context-item" data-action="remove">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-        <span>Rimuovi dallo snapshot</span>
-      </button>
-      ${artistId ? `
-      <button class="context-item" data-action="artist">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <span>Vai all'artista</span>
-      </button>` : ''}
-      <button class="context-item" data-action="open-album">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-        <span>Apri album su Spotify</span>
-      </button>
+      <button class="context-item" data-action="share"><span>Condividi album</span></button>
+      <button class="context-item" data-action="remove"><span>Rimuovi dallo snapshot</span></button>
+      ${artistId ? `<button class="context-item" data-action="artist"><span>Vai all'artista</span></button>` : ''}
+      <button class="context-item" data-action="open-album"><span>Apri album su Spotify</span></button>
     </div>
   `;
 
   document.body.appendChild(sheet);
   requestAnimationFrame(() => sheet.classList.add('open'));
-
   sheet.querySelector('.context-backdrop').addEventListener('click', dismissContextMenu);
 
   sheet.querySelectorAll('.context-item').forEach(btn => {
@@ -681,12 +617,8 @@ function showAlbumContextMenu(item, snapshot, weekKey, user, allItems, getCurren
         if (navigator.share) {
           try { await navigator.share({ title: album.name, url }); } catch (_) {}
         } else {
-          try {
-            await navigator.clipboard.writeText(url);
-            showToast('Link copiato ✓');
-          } catch (_) {
-            showToast('Link: ' + url, 'info', 5000);
-          }
+          try { await navigator.clipboard.writeText(url); showToast('Link copiato ✓'); }
+          catch (_) { showToast('Link: ' + url, 'info', 5000); }
         }
       }
 
@@ -696,26 +628,15 @@ function showAlbumContextMenu(item, snapshot, weekKey, user, allItems, getCurren
         showToast('Rimosso dallo snapshot ✓');
       }
 
-      if (action === 'artist' && artistId) {
-        window.open(`spotify:artist:${artistId}`, '_blank');
-      }
-
-      if (action === 'open-album') {
-        window.open(`spotify:album:${album.id}`, '_blank');
-      }
+      if (action === 'artist' && artistId) { window.open(`spotify:artist:${artistId}`, '_blank'); }
+      if (action === 'open-album') { window.open(`spotify:album:${album.id}`, '_blank'); }
     });
   });
 }
 
-/**
- * Mostra i crediti di una traccia in un bottom sheet.
- * L'API Spotify pubblica non espone i crediti completi (produttori, autori, ecc.),
- * quindi mostriamo i dati disponibili nello snapshot + link alla pagina crediti su Spotify.
- */
 async function showTrackCredits(track) {
   dismissContextMenu();
 
-  // Mostra subito un sheet con i dati già disponibili
   const sheet = document.createElement('div');
   sheet.className = 'context-sheet';
   sheet.innerHTML = `
@@ -730,9 +651,7 @@ async function showTrackCredits(track) {
       </div>
       <div class="context-divider"></div>
       <div class="credits-body" id="credits-body">
-        <div class="credits-loading">
-          <div class="spinner" style="width:20px;height:20px;border-width:2px"></div>
-        </div>
+        <div class="credits-loading"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div></div>
       </div>
     </div>
   `;
@@ -740,7 +659,6 @@ async function showTrackCredits(track) {
   requestAnimationFrame(() => sheet.classList.add('open'));
   sheet.querySelector('.context-backdrop').addEventListener('click', dismissContextMenu);
 
-  // Recupera dati aggiuntivi dalla API
   let extraData = null;
   try {
     extraData = await spotifyFetch(`/tracks/${track.id}?market=from_token`);
@@ -753,7 +671,6 @@ async function showTrackCredits(track) {
   if (!creditsBody) return;
 
   const albumName = extraData?.album?.name || track.album_name || '—';
-  const albumType = extraData?.album?.album_type || '—';
   const releaseDate = extraData?.album?.release_date || '—';
   const duration = formatTrackDuration(track.duration_ms);
   const trackNumber = extraData?.track_number ? `${extraData.track_number}` : '—';
@@ -761,59 +678,29 @@ async function showTrackCredits(track) {
   const explicit = extraData?.explicit ? '<span class="credits-tag">E</span>' : '';
   const isrc = extraData?.external_ids?.isrc || null;
   const popularity = extraData?.popularity != null ? `${extraData.popularity}/100` : null;
-
-  // Tutti gli artisti della traccia (con link)
   const allArtists = extraData?.artists || track.artists;
 
   creditsBody.innerHTML = `
     <div class="credits-section">
       <p class="credits-label">Artisti</p>
       <div class="credits-artists">
-        ${allArtists.map(a => `
-          <button class="credits-artist-btn" data-artist-id="${a.id}">
-            ${escHtml(a.name)}
-          </button>
-        `).join('')}
+        ${allArtists.map(a => `<button class="credits-artist-btn" data-artist-id="${a.id}">${escHtml(a.name)}</button>`).join('')}
       </div>
     </div>
-    <div class="credits-section">
-      <p class="credits-label">Album</p>
-      <p class="credits-value">${escHtml(albumName)} ${explicit}</p>
+    <div class="credits-section"><p class="credits-label">Album</p><p class="credits-value">${escHtml(albumName)} ${explicit}</p></div>
+    <div class="credits-row">
+      <div class="credits-section half"><p class="credits-label">Uscita</p><p class="credits-value">${escHtml(releaseDate)}</p></div>
+      <div class="credits-section half"><p class="credits-label">Durata</p><p class="credits-value">${duration}</p></div>
     </div>
     <div class="credits-row">
-      <div class="credits-section half">
-        <p class="credits-label">Uscita</p>
-        <p class="credits-value">${escHtml(releaseDate)}</p>
-      </div>
-      <div class="credits-section half">
-        <p class="credits-label">Durata</p>
-        <p class="credits-value">${duration}</p>
-      </div>
+      <div class="credits-section half"><p class="credits-label">Traccia n°</p><p class="credits-value">${trackNumber}${discNumber}</p></div>
+      ${popularity ? `<div class="credits-section half"><p class="credits-label">Popolarità</p><p class="credits-value">${popularity}</p></div>` : ''}
     </div>
-    <div class="credits-row">
-      <div class="credits-section half">
-        <p class="credits-label">Traccia n°</p>
-        <p class="credits-value">${trackNumber}${discNumber}</p>
-      </div>
-      ${popularity ? `
-      <div class="credits-section half">
-        <p class="credits-label">Popolarità</p>
-        <p class="credits-value">${popularity}</p>
-      </div>` : ''}
-    </div>
-    ${isrc ? `
-    <div class="credits-section">
-      <p class="credits-label">ISRC</p>
-      <p class="credits-value credits-mono">${isrc}</p>
-    </div>` : ''}
+    ${isrc ? `<div class="credits-section"><p class="credits-label">ISRC</p><p class="credits-value credits-mono">${isrc}</p></div>` : ''}
     <div class="context-divider" style="margin: 8px 0"></div>
-    <button class="context-item" id="open-spotify-credits">
-      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-      <span>Crediti completi su Spotify</span>
-    </button>
+    <button class="context-item" id="open-spotify-credits"><span>Crediti completi su Spotify</span></button>
   `;
 
-  // Link artisti
   creditsBody.querySelectorAll('.credits-artist-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.artistId;
@@ -821,7 +708,6 @@ async function showTrackCredits(track) {
     });
   });
 
-  // Link crediti completi Spotify
   document.getElementById('open-spotify-credits')?.addEventListener('click', () => {
     window.open(`https://open.spotify.com/track/${track.id}`, '_blank');
   });
@@ -832,7 +718,6 @@ function dismissContextMenu() {
   if (existing) {
     existing.classList.remove('open');
     existing.addEventListener('transitionend', () => existing.remove(), { once: true });
-    // Fallback se transition non scatta
     setTimeout(() => existing.remove(), 400);
   }
 }
@@ -840,7 +725,7 @@ function dismissContextMenu() {
 function removeItemFromSnapshot(snapshot, weekKey, itemToRemove) {
   const before = snapshot.items.length;
   snapshot.items = snapshot.items.filter(i => i !== itemToRemove);
-  console.log(`[App] Rimosso item da snapshot. ${before} → ${snapshot.items.length} items`);
+  console.log(`[App] Rimosso item da snapshot. ${before} -> ${snapshot.items.length} items`);
   saveSnapshot(weekKey, snapshot);
 }
 
@@ -885,26 +770,22 @@ async function handlePlay(uris, shuffle) {
   playInProgress = true;
   console.log(`[App] handlePlay: ${uris.length} URI, shuffle=${shuffle}`);
 
-  // Mostra toast di avanzamento
   showToast('Preparo la playlist...', 'info', 30000);
 
   try {
     const playlistId = await writeExpandedPlaylist(uris, (msg) => {
       console.log('[App] Play progress:', msg);
-      // Aggiorna il toast se ancora visibile
       const toast = document.querySelector('.toast.info');
       if (toast) toast.textContent = msg;
     });
 
     console.log('[App] Playlist scritta, apro Spotify:', playlistId);
 
-    // Chiudi il toast di avanzamento
     const infoToast = document.querySelector('.toast.info');
-    if (infoToast) infoToast.style.animation = 'none', infoToast.remove();
+    if (infoToast) { infoToast.style.animation = 'none'; infoToast.remove(); }
 
     showToast('Playlist pronta ✓', 'info', 2000);
 
-    // Deep link Spotify — apre l'app sulla playlist
     const deepLink = `spotify:playlist:${playlistId}`;
     console.log('[App] Deep link:', deepLink);
     window.location.href = deepLink;

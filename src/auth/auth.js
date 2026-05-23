@@ -207,7 +207,7 @@ export function isLoggedIn() {
  * - retry su 401 (token appena scaduto)
  * - exponential backoff su 429 (rate limit)
  *
- * @param {string} endpoint  - path relativo, es. '/me' o '/playlists/123/tracks'
+ * @param {string} endpoint  - path relativo, es. '/me' o '/playlists/123/items'
  * @param {RequestInit} options - opzioni fetch standard
  * @param {number} _retryCount - uso interno per recursione
  * @returns {Promise<any>} JSON parsed response

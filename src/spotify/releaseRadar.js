@@ -7,20 +7,17 @@
  * Soluzione: l'utente mantiene una sua playlist privata chiamata "Release Radar"
  * che copia manualmente dalla Release Radar ogni venerdì.
  * La PWA legge quella, genera lo snapshot, poi la svuota in background.
+ *
+ * NOTA endpoint Spotify (marzo 2026): /playlists/{id}/tracks è stato RIMOSSO
+ * per le app in Development Mode (403). Usare sempre /playlists/{id}/items.
  */
 
 import { spotifyFetch } from '../auth/auth.js';
 import { RR_SOURCE_PLAYLIST_NAME } from '../auth/config.js';
 
-/**
- * Cerca la playlist sorgente tra le playlist dell'utente.
- * Se non esiste, la crea privata.
- * @returns {Promise<{id: string, name: string, total: number}>}
- */
 export async function findOrCreateRRSource() {
   console.log(`[ReleaseRadar] Cerco playlist sorgente "${RR_SOURCE_PLAYLIST_NAME}"...`);
 
-  // Cerca tra le playlist dell'utente
   let offset = 0;
   while (true) {
     const data = await spotifyFetch(`/me/playlists?limit=50&offset=${offset}`);
@@ -35,7 +32,6 @@ export async function findOrCreateRRSource() {
     offset += 50;
   }
 
-  // Non trovata — creala
   console.log(`[ReleaseRadar] Non trovata, creo "${RR_SOURCE_PLAYLIST_NAME}"...`);
   const created = await spotifyFetch(`/me/playlists`, {
     method: 'POST',
@@ -53,11 +49,10 @@ export async function findOrCreateRRSource() {
 /**
  * Svuota la playlist sorgente (una singola chiamata PUT con array vuoto).
  * Chiamata in background dopo che lo snapshot è già stato mostrato.
- * @param {string} playlistId
  */
 export async function clearRRSource(playlistId) {
   console.log(`[ReleaseRadar] Svuoto playlist sorgente ${playlistId}...`);
-  await spotifyFetch(`/playlists/${playlistId}/tracks`, {
+  await spotifyFetch(`/playlists/${playlistId}/items`, {
     method: 'PUT',
     body: JSON.stringify({ uris: [] }),
   });
@@ -66,8 +61,6 @@ export async function clearRRSource(playlistId) {
 
 /**
  * Scarica tutte le tracce dalla playlist sorgente.
- * @param {string} playlistId
- * @returns {Promise<Array>} array di track objects
  */
 export async function fetchAllPlaylistTracks(playlistId) {
   console.log('[ReleaseRadar] Scarico tracce della playlist:', playlistId);
@@ -76,9 +69,9 @@ export async function fetchAllPlaylistTracks(playlistId) {
   let offset = 0;
   const limit = 100;
 
-  // Spotify ha ridenominato la chiave da `track` a `item` sull'endpoint /items.
-  // Con la projection `fields=items(track(...))` Spotify rimappa la risposta
-  // usando ancora `track`, ma per robustezza leggiamo anche `.item` come fallback.
+  // Spotify ha rinominato la chiave da `track` a `item` sull'endpoint /items.
+  // Con la projection `fields=items(track(...))` Spotify rimappa a `track`,
+  // ma per robustezza leggiamo anche `.item` come fallback.
   // Nota: album_group rimosso da Feb 2026 — non incluso nei fields.
   const fields = encodeURIComponent(
     'next,total,items(track(uri,id,name,duration_ms,track_number,artists(id,name),album(id,uri,name,album_type,total_tracks,images,artists(id,name))),item(uri,id,name,duration_ms,track_number,artists(id,name),album(id,uri,name,album_type,total_tracks,images,artists(id,name))))'
@@ -95,7 +88,6 @@ export async function fetchAllPlaylistTracks(playlistId) {
       item_keys: first ? Object.keys(first) : null,
     }));
 
-    // Normalizza: prendi .track se presente, altrimenti .item
     const normalized = (data.items || [])
       .map(it => it?.track ?? it?.item)
       .filter(t => t?.uri?.startsWith('spotify:track:'));
