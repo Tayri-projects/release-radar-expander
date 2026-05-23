@@ -175,12 +175,29 @@ body {
 }
 
 /* Navigazione settimana — frecce separate + pill data centrata */
+/*
+  COLORI PILL NAVIGAZIONE — dove modificarli manualmente:
+  ─────────────────────────────────────────────────────────
+  • Sfondo di tutte e 3 le pill (frecce + data):
+      → --week-pill-bg       (attualmente #2a2a2a, uguale a --bg-elevated ma separato per controllo)
+  • Colore icone frecce:
+      → --week-arrow-color   (attualmente #e0e0e0, grigio chiarissimo quasi bianco)
+  • Colore testo data:
+      → color inside .week-date (attualmente var(--text-primary) = #ffffff)
+  ─────────────────────────────────────────────────────────
+*/
+:root {
+  --week-pill-bg:     #2a2a2a;   /* sfondo pill frecce e data  ← modifica qui */
+  --week-arrow-color: #e0e0e0;   /* colore icone frecce        ← modifica qui */
+}
+
 .week-nav {
   display: flex; align-items: center; gap: 8px;
   margin-bottom: 20px;
 }
 .week-nav-btn {
-  background: var(--bg-elevated); border: none; color: var(--text-secondary);
+  background: var(--week-pill-bg); border: none;
+  color: var(--week-arrow-color);
   cursor: pointer; padding: 6px 10px;
   border-radius: var(--r-full);
   display: flex; align-items: center; justify-content: center;
@@ -192,11 +209,11 @@ body {
 .week-date {
   font-size: .83rem; color: var(--text-primary); font-weight: 500;
   padding: 6px 14px;
-  background: var(--bg-elevated);
+  background: var(--week-pill-bg);
   border-radius: var(--r-full);
   white-space: nowrap;
   text-align: center;
-  flex: 1;
+  width: fit-content;   /* 50% più stretta — non occupa tutta la riga */
 }
 
 /* Titolo principale — enorme e bold come nel mockup */
@@ -245,16 +262,16 @@ body {
   flex-shrink: 0;
 }
 
-/* Shuffle: pill con bordo, stile Spotify */
+/* Shuffle: pill con bordo, solo icona */
 .btn-shuffle {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; justify-content: center;
   background: transparent;
   border: 1.5px solid var(--bg-highlight);
   color: var(--text-secondary); cursor: pointer;
-  padding: 7px 14px; border-radius: var(--r-full);
-  font-size: .78rem; font-weight: 600;
+  width: 40px; height: 40px;
+  border-radius: var(--r-full);
   transition: color .15s, border-color .15s, background .15s;
-  white-space: nowrap;
+  flex-shrink: 0;
 }
 .btn-shuffle:hover {
   color: var(--text-primary);
@@ -539,6 +556,63 @@ body {
 .context-item svg { color: var(--text-secondary); flex-shrink: 0; }
 .context-item:hover { background: var(--bg-highlight); }
 .context-item:active { background: var(--bg-base); }
+
+/* Credits panel */
+.credits-panel {
+  max-height: 80dvh;
+  overflow-y: auto;
+}
+.credits-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px 12px;
+}
+.credits-loading {
+  display: flex; justify-content: center;
+  padding: 28px 0;
+}
+.credits-body {
+  padding: 4px 0 0;
+}
+.credits-section {
+  padding: 10px 20px;
+}
+.credits-section.half {
+  flex: 1; padding: 10px 12px;
+}
+.credits-row {
+  display: flex; gap: 0;
+  padding: 0 8px;
+}
+.credits-label {
+  font-size: .7rem; color: var(--text-subdued);
+  text-transform: uppercase; letter-spacing: .06em;
+  font-weight: 600; margin-bottom: 4px;
+}
+.credits-value {
+  font-size: .88rem; color: var(--text-primary); font-weight: 500;
+  display: flex; align-items: center; gap: 6px;
+}
+.credits-mono {
+  font-family: monospace; font-size: .8rem; color: var(--text-secondary);
+}
+.credits-tag {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px;
+  background: var(--text-secondary); color: var(--bg-base);
+  border-radius: 2px; font-size: .65rem; font-weight: 700;
+  flex-shrink: 0;
+}
+.credits-artists {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;
+}
+.credits-artist-btn {
+  background: var(--bg-highlight); border: none;
+  color: var(--text-primary); cursor: pointer;
+  padding: 5px 12px; border-radius: var(--r-full);
+  font-size: .82rem; font-weight: 500;
+  transition: background .15s;
+}
+.credits-artist-btn:hover { background: var(--bg-elevated); }
 
 /* =============================================
    FOOTER ACTIONS

@@ -213,8 +213,7 @@ function renderHome(user, snapshot, weekKey, fromCache) {
           </div>
           <div class="action-play-row">
             <button class="btn-shuffle" id="shuffle-btn" title="Shuffle">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
-              <span>Shuffle</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
             </button>
             <button class="btn-play-main" id="play-btn">
               <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -606,8 +605,11 @@ function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurre
           showToast('Aggiunto alla coda ✓');
         } catch (e) {
           console.error('[App] Errore add to queue:', e);
-          if (e.message === 'SPOTIFY_API_ERROR_403' || e.message === 'SPOTIFY_API_ERROR_404') {
-            showToast('Apri Spotify e avvia un brano, poi riprova.', 'error', 4000);
+          if (e.message === 'SPOTIFY_API_ERROR_404') {
+            // 404 = nessun dispositivo attivo su Spotify
+            showToast('Nessun dispositivo attivo. Avvia Spotify su un dispositivo e riprova.', 'error', 5000);
+          } else if (e.message === 'SPOTIFY_API_ERROR_403') {
+            showToast('Permesso negato. Rieffettua il login.', 'error', 4000);
           } else {
             showToast('Errore coda: ' + e.message, 'error', 3000);
           }
@@ -619,7 +621,7 @@ function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurre
       }
 
       if (action === 'credits') {
-        window.open(`https://open.spotify.com/track/${track.id}`, '_blank');
+        showTrackCredits(track);
       }
     });
   });
@@ -702,6 +704,126 @@ function showAlbumContextMenu(item, snapshot, weekKey, user, allItems, getCurren
         window.open(`spotify:album:${album.id}`, '_blank');
       }
     });
+  });
+}
+
+/**
+ * Mostra i crediti di una traccia in un bottom sheet.
+ * L'API Spotify pubblica non espone i crediti completi (produttori, autori, ecc.),
+ * quindi mostriamo i dati disponibili nello snapshot + link alla pagina crediti su Spotify.
+ */
+async function showTrackCredits(track) {
+  dismissContextMenu();
+
+  // Mostra subito un sheet con i dati già disponibili
+  const sheet = document.createElement('div');
+  sheet.className = 'context-sheet';
+  sheet.innerHTML = `
+    <div class="context-backdrop"></div>
+    <div class="context-panel credits-panel">
+      <div class="credits-header">
+        <img class="context-thumb" src="${track.album_cover || ''}" alt="" onerror="this.style.background='var(--bg-elevated)'">
+        <div class="context-track-info">
+          <p class="context-track-name">${escHtml(track.name)}</p>
+          <p class="context-track-artist">${escHtml(track.artists.map(a => a.name).join(', '))}</p>
+        </div>
+      </div>
+      <div class="context-divider"></div>
+      <div class="credits-body" id="credits-body">
+        <div class="credits-loading">
+          <div class="spinner" style="width:20px;height:20px;border-width:2px"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add('open'));
+  sheet.querySelector('.context-backdrop').addEventListener('click', dismissContextMenu);
+
+  // Recupera dati aggiuntivi dalla API
+  let extraData = null;
+  try {
+    extraData = await spotifyFetch(`/tracks/${track.id}?market=from_token`);
+    console.log('[App] Track data per crediti:', extraData);
+  } catch (e) {
+    console.warn('[App] Impossibile caricare dati traccia:', e.message);
+  }
+
+  const creditsBody = document.getElementById('credits-body');
+  if (!creditsBody) return;
+
+  const albumName = extraData?.album?.name || track.album_name || '—';
+  const albumType = extraData?.album?.album_type || '—';
+  const releaseDate = extraData?.album?.release_date || '—';
+  const duration = formatTrackDuration(track.duration_ms);
+  const trackNumber = extraData?.track_number ? `${extraData.track_number}` : '—';
+  const discNumber = extraData?.disc_number > 1 ? ` · Disco ${extraData.disc_number}` : '';
+  const explicit = extraData?.explicit ? '<span class="credits-tag">E</span>' : '';
+  const isrc = extraData?.external_ids?.isrc || null;
+  const popularity = extraData?.popularity != null ? `${extraData.popularity}/100` : null;
+
+  // Tutti gli artisti della traccia (con link)
+  const allArtists = extraData?.artists || track.artists;
+
+  creditsBody.innerHTML = `
+    <div class="credits-section">
+      <p class="credits-label">Artisti</p>
+      <div class="credits-artists">
+        ${allArtists.map(a => `
+          <button class="credits-artist-btn" data-artist-id="${a.id}">
+            ${escHtml(a.name)}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+    <div class="credits-section">
+      <p class="credits-label">Album</p>
+      <p class="credits-value">${escHtml(albumName)} ${explicit}</p>
+    </div>
+    <div class="credits-row">
+      <div class="credits-section half">
+        <p class="credits-label">Uscita</p>
+        <p class="credits-value">${escHtml(releaseDate)}</p>
+      </div>
+      <div class="credits-section half">
+        <p class="credits-label">Durata</p>
+        <p class="credits-value">${duration}</p>
+      </div>
+    </div>
+    <div class="credits-row">
+      <div class="credits-section half">
+        <p class="credits-label">Traccia n°</p>
+        <p class="credits-value">${trackNumber}${discNumber}</p>
+      </div>
+      ${popularity ? `
+      <div class="credits-section half">
+        <p class="credits-label">Popolarità</p>
+        <p class="credits-value">${popularity}</p>
+      </div>` : ''}
+    </div>
+    ${isrc ? `
+    <div class="credits-section">
+      <p class="credits-label">ISRC</p>
+      <p class="credits-value credits-mono">${isrc}</p>
+    </div>` : ''}
+    <div class="context-divider" style="margin: 8px 0"></div>
+    <button class="context-item" id="open-spotify-credits">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+      <span>Crediti completi su Spotify</span>
+    </button>
+  `;
+
+  // Link artisti
+  creditsBody.querySelectorAll('.credits-artist-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.artistId;
+      if (id) window.open(`spotify:artist:${id}`, '_blank');
+    });
+  });
+
+  // Link crediti completi Spotify
+  document.getElementById('open-spotify-credits')?.addEventListener('click', () => {
+    window.open(`https://open.spotify.com/track/${track.id}`, '_blank');
   });
 }
 

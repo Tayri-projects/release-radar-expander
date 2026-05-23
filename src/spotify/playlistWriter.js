@@ -22,6 +22,27 @@ import { RR_SOURCE_PLAYLIST_NAME } from '../auth/config.js';
 const EXPANDED_PLAYLIST_DESCRIPTION = 'Release Radar espansa — generata da Release Radar Expander. Non modificare.';
 
 /**
+ * Crea sempre una nuova playlist destinazione fresca.
+ * Usata quando l'ID esistente risulta non modificabile (403).
+ * @returns {Promise<string>} ID della nuova playlist
+ */
+async function createFreshExpandedPlaylist() {
+  console.log('[PlaylistWriter] Creo una nuova playlist espansa...');
+  const created = await spotifyFetch('/me/playlists', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: RR_SOURCE_PLAYLIST_NAME,
+      public: false,
+      collaborative: false,
+      description: EXPANDED_PLAYLIST_DESCRIPTION,
+    }),
+  });
+  console.log('[PlaylistWriter] Nuova playlist espansa creata:', created.id);
+  saveExpandedPlaylistId(created.id);
+  return created.id;
+}
+
+/**
  * Trova la playlist destinazione tramite ID salvato, oppure cercandola per descrizione,
  * oppure creandola.
  * @returns {Promise<string>} ID della playlist destinazione
@@ -31,21 +52,13 @@ export async function findOrCreateExpandedPlaylist() {
   const savedId = getExpandedPlaylistId();
   if (savedId) {
     console.log('[PlaylistWriter] ID playlist espansa trovato in localStorage:', savedId);
-    // Verifica che esista ancora E che sia modificabile dall'utente corrente
+    // Verifica solo che esista (GET non dà 403, è la modifica che la dà)
     try {
-      const pl = await spotifyFetch(`/playlists/${savedId}?fields=id,owner`);
-      const me = await spotifyFetch('/me?fields=id');
-      if (pl?.owner?.id && me?.id && pl.owner.id !== me.id) {
-        console.warn('[PlaylistWriter] Playlist espansa non appartiene all\'utente corrente — invalido e ricreo.');
-        saveExpandedPlaylistId(null);
-        // Continua con la ricerca per descrizione
-      } else {
-        return savedId;
-      }
+      await spotifyFetch(`/playlists/${savedId}?fields=id`);
+      return savedId;
     } catch (e) {
-      console.warn('[PlaylistWriter] Playlist salvata non accessibile (403/404), invalido e ricerco...', e.message);
+      console.warn('[PlaylistWriter] Playlist salvata non trovata, invalido e ricreo:', e.message);
       saveExpandedPlaylistId(null);
-      // Continua con la ricerca per descrizione
     }
   }
 
@@ -70,24 +83,13 @@ export async function findOrCreateExpandedPlaylist() {
   }
 
   // 3. Non trovata — crea la playlist destinazione
-  console.log('[PlaylistWriter] Playlist espansa non trovata, la creo...');
-  const created = await spotifyFetch('/me/playlists', {
-    method: 'POST',
-    body: JSON.stringify({
-      name: RR_SOURCE_PLAYLIST_NAME,
-      public: false,
-      collaborative: false,
-      description: EXPANDED_PLAYLIST_DESCRIPTION,
-    }),
-  });
-  console.log('[PlaylistWriter] Playlist espansa creata:', created.id);
-  saveExpandedPlaylistId(created.id);
-  return created.id;
+  return createFreshExpandedPlaylist();
 }
 
 /**
  * Sovrascrive la playlist destinazione con le URI fornite.
  * Prima svuota con PUT uris:[], poi aggiunge in batch da 100 con POST.
+ * Se il PUT di svuotamento risponde 403, invalida la playlist, ne crea una nuova e riprova.
  * @param {string[]} uris  - array di spotify:track:... URI
  * @param {function} onProgress - callback(message) per aggiornare la UI
  * @returns {Promise<string>} ID della playlist scritta
@@ -96,15 +98,33 @@ export async function writeExpandedPlaylist(uris, onProgress = () => {}) {
   console.log(`[PlaylistWriter] Scrivo ${uris.length} URI nella playlist espansa...`);
 
   onProgress('Preparo la playlist...');
-  const playlistId = await findOrCreateExpandedPlaylist();
+  let playlistId = await findOrCreateExpandedPlaylist();
 
-  // Svuota la playlist
+  // Svuota la playlist — con retry automatico se 403
   onProgress('Svuoto la playlist...');
   console.log('[PlaylistWriter] Svuoto playlist destinazione...');
-  await spotifyFetch(`/playlists/${playlistId}/tracks`, {
-    method: 'PUT',
-    body: JSON.stringify({ uris: [] }),
-  });
+  try {
+    await spotifyFetch(`/playlists/${playlistId}/tracks`, {
+      method: 'PUT',
+      body: JSON.stringify({ uris: [] }),
+    });
+  } catch (e) {
+    if (e.message === 'SPOTIFY_API_ERROR_403') {
+      // La playlist salvata non è modificabile — probabilmente creata con scope diversi.
+      // Invalidiamo e ne creiamo una nuova fresca con il token corrente.
+      console.warn('[PlaylistWriter] 403 su svuotamento — invalido playlist e ne creo una nuova...');
+      saveExpandedPlaylistId(null);
+      onProgress('Creo una nuova playlist...');
+      playlistId = await createFreshExpandedPlaylist();
+      console.log('[PlaylistWriter] Ritento svuotamento sulla nuova playlist:', playlistId);
+      await spotifyFetch(`/playlists/${playlistId}/tracks`, {
+        method: 'PUT',
+        body: JSON.stringify({ uris: [] }),
+      });
+    } else {
+      throw e;
+    }
+  }
 
   // Aggiunge le tracce in batch da 100
   const BATCH_SIZE = 100;
