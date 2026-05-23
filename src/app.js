@@ -3,7 +3,7 @@
  */
 
 import { login, handleCallback, isLoggedIn, spotifyFetch, refreshAccessToken } from './auth/auth.js';
-import { getAuth, clearAuth, isTokenExpired, getAllSnapshotKeys, getSnapshot } from './auth/storage.js';
+import { getAuth, clearAuth, isTokenExpired, getAllSnapshotKeys, getSnapshot, saveSnapshot } from './auth/storage.js';
 import { showToast } from './ui/toast.js';
 import { loadOrCreateCurrentSnapshot, forceRefreshSnapshot } from './spotify/snapshotManager.js';
 import { getCurrentWeekKey } from './spotify/expander.js';
@@ -196,27 +196,30 @@ function renderHome(user, snapshot, weekKey, fromCache) {
 
       <!-- Azioni -->
       <div class="playlist-actions">
-        <div class="action-downloads">
-          <button class="btn-action-dl" title="Scarica tutto" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span>Scarica Tutto</span>
-          </button>
-          <button class="btn-action-dl" id="dl-singles-btn" title="Solo Singoli" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span>Solo Singoli</span>
-          </button>
-          <button class="btn-action-dl" id="dl-albums-btn" title="Solo Album" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span>Solo Album</span>
-          </button>
-        </div>
-        <div class="action-play-row">
-          <button class="btn-shuffle" id="shuffle-btn" title="Shuffle">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
-          </button>
-          <button class="btn-play-main" id="play-btn">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </button>
+        <div class="action-main-row">
+          <div class="action-downloads">
+            <button class="btn-action-dl" title="Scarica tutto" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Scarica Tutto</span>
+            </button>
+            <button class="btn-action-dl" id="dl-singles-btn" title="Solo Singoli" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Singoli</span>
+            </button>
+            <button class="btn-action-dl" id="dl-albums-btn" title="Solo Album" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Album</span>
+            </button>
+          </div>
+          <div class="action-play-row">
+            <button class="btn-shuffle" id="shuffle-btn" title="Shuffle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+              <span>Shuffle</span>
+            </button>
+            <button class="btn-play-main" id="play-btn">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -476,6 +479,253 @@ function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) 
       }
     });
   });
+
+  // Tap su riga singolo → avvia riproduzione del singolo
+  document.querySelectorAll('.single-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-more')) return;
+      const idx = parseInt(row.dataset.idx, 10);
+      const filtered = filterItems(items, getCurrentFilter());
+      const item = filtered[idx];
+      if (item && item.type === 'single') {
+        console.log('[App] Tap singolo:', item.track.name);
+        handlePlay([item.track.uri], false);
+      }
+    });
+  });
+
+  // Menu 3 puntini — singoli
+  document.querySelectorAll('.single-row .btn-more').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.idx, 10);
+      const filtered = filterItems(items, getCurrentFilter());
+      const item = filtered[idx];
+      if (item && item.type === 'single') {
+        showSingleContextMenu(item, snapshot, weekKey, user, items, getCurrentFilter);
+      }
+    });
+  });
+
+  // Menu 3 puntini — album
+  document.querySelectorAll('.album-row .btn-more').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.idx, 10);
+      const filtered = filterItems(items, getCurrentFilter());
+      const item = filtered[idx];
+      if (item && item.type === 'album_expansion') {
+        showAlbumContextMenu(item, snapshot, weekKey, user, items, getCurrentFilter);
+      }
+    });
+  });
+}
+
+// ---- Context menu bottom sheet ----
+
+function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurrentFilter) {
+  const track = item.track;
+  const artistId = track.artists?.[0]?.id;
+
+  dismissContextMenu();
+
+  const sheet = document.createElement('div');
+  sheet.className = 'context-sheet';
+  sheet.innerHTML = `
+    <div class="context-backdrop"></div>
+    <div class="context-panel">
+      <div class="context-track-header">
+        <img class="context-thumb" src="${track.album_cover || ''}" alt="" onerror="this.style.background='var(--bg-elevated)'">
+        <div class="context-track-info">
+          <p class="context-track-name">${escHtml(track.name)}</p>
+          <p class="context-track-artist">${escHtml(track.artists.map(a => a.name).join(', '))}</p>
+        </div>
+      </div>
+      <div class="context-divider"></div>
+      <button class="context-item" data-action="share">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        <span>Condividi</span>
+      </button>
+      <button class="context-item" data-action="remove">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        <span>Rimuovi dallo snapshot</span>
+      </button>
+      <button class="context-item" data-action="queue">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span>Aggiungi alla coda</span>
+      </button>
+      ${artistId ? `
+      <button class="context-item" data-action="artist">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>Vai all'artista</span>
+      </button>` : ''}
+      <button class="context-item" data-action="credits">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Crediti canzone</span>
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(sheet);
+
+  // Animazione entrata
+  requestAnimationFrame(() => sheet.classList.add('open'));
+
+  // Chiudi su backdrop click
+  sheet.querySelector('.context-backdrop').addEventListener('click', dismissContextMenu);
+
+  // Azioni
+  sheet.querySelectorAll('.context-item').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action;
+      dismissContextMenu();
+
+      if (action === 'share') {
+        const url = `https://open.spotify.com/track/${track.id}`;
+        if (navigator.share) {
+          try { await navigator.share({ title: track.name, url }); } catch (_) {}
+        } else {
+          try {
+            await navigator.clipboard.writeText(url);
+            showToast('Link copiato ✓');
+          } catch (_) {
+            showToast('Link: ' + url, 'info', 5000);
+          }
+        }
+      }
+
+      if (action === 'remove') {
+        removeItemFromSnapshot(snapshot, weekKey, item);
+        renderHome(user, snapshot, weekKey, true);
+        showToast('Rimosso dallo snapshot ✓');
+      }
+
+      if (action === 'queue') {
+        try {
+          await addToQueue(track.uri);
+          showToast('Aggiunto alla coda ✓');
+        } catch (e) {
+          console.error('[App] Errore add to queue:', e);
+          if (e.message === 'SPOTIFY_API_ERROR_403' || e.message === 'SPOTIFY_API_ERROR_404') {
+            showToast('Apri Spotify e avvia un brano, poi riprova.', 'error', 4000);
+          } else {
+            showToast('Errore coda: ' + e.message, 'error', 3000);
+          }
+        }
+      }
+
+      if (action === 'artist' && artistId) {
+        window.open(`spotify:artist:${artistId}`, '_blank');
+      }
+
+      if (action === 'credits') {
+        window.open(`https://open.spotify.com/track/${track.id}`, '_blank');
+      }
+    });
+  });
+}
+
+function showAlbumContextMenu(item, snapshot, weekKey, user, allItems, getCurrentFilter) {
+  const album = item.album;
+  const artistId = album.artists?.[0]?.id;
+
+  dismissContextMenu();
+
+  const sheet = document.createElement('div');
+  sheet.className = 'context-sheet';
+  sheet.innerHTML = `
+    <div class="context-backdrop"></div>
+    <div class="context-panel">
+      <div class="context-track-header">
+        <img class="context-thumb" src="${album.cover || ''}" alt="" onerror="this.style.background='var(--bg-elevated)'">
+        <div class="context-track-info">
+          <p class="context-track-name">${escHtml(album.name)}</p>
+          <p class="context-track-artist">${escHtml(album.artists.map(a => a.name).join(', '))}</p>
+        </div>
+      </div>
+      <div class="context-divider"></div>
+      <button class="context-item" data-action="share">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        <span>Condividi album</span>
+      </button>
+      <button class="context-item" data-action="remove">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        <span>Rimuovi dallo snapshot</span>
+      </button>
+      ${artistId ? `
+      <button class="context-item" data-action="artist">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>Vai all'artista</span>
+      </button>` : ''}
+      <button class="context-item" data-action="open-album">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>Apri album su Spotify</span>
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add('open'));
+
+  sheet.querySelector('.context-backdrop').addEventListener('click', dismissContextMenu);
+
+  sheet.querySelectorAll('.context-item').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action;
+      dismissContextMenu();
+
+      if (action === 'share') {
+        const url = `https://open.spotify.com/album/${album.id}`;
+        if (navigator.share) {
+          try { await navigator.share({ title: album.name, url }); } catch (_) {}
+        } else {
+          try {
+            await navigator.clipboard.writeText(url);
+            showToast('Link copiato ✓');
+          } catch (_) {
+            showToast('Link: ' + url, 'info', 5000);
+          }
+        }
+      }
+
+      if (action === 'remove') {
+        removeItemFromSnapshot(snapshot, weekKey, item);
+        renderHome(user, snapshot, weekKey, true);
+        showToast('Rimosso dallo snapshot ✓');
+      }
+
+      if (action === 'artist' && artistId) {
+        window.open(`spotify:artist:${artistId}`, '_blank');
+      }
+
+      if (action === 'open-album') {
+        window.open(`spotify:album:${album.id}`, '_blank');
+      }
+    });
+  });
+}
+
+function dismissContextMenu() {
+  const existing = document.querySelector('.context-sheet');
+  if (existing) {
+    existing.classList.remove('open');
+    existing.addEventListener('transitionend', () => existing.remove(), { once: true });
+    // Fallback se transition non scatta
+    setTimeout(() => existing.remove(), 400);
+  }
+}
+
+function removeItemFromSnapshot(snapshot, weekKey, itemToRemove) {
+  const before = snapshot.items.length;
+  snapshot.items = snapshot.items.filter(i => i !== itemToRemove);
+  console.log(`[App] Rimosso item da snapshot. ${before} → ${snapshot.items.length} items`);
+  saveSnapshot(weekKey, snapshot);
+}
+
+async function addToQueue(uri) {
+  console.log('[App] Aggiungo alla coda:', uri);
+  await spotifyFetch(`/me/player/queue?uri=${encodeURIComponent(uri)}`, { method: 'POST' });
+  console.log('[App] Aggiunto alla coda ✓');
 }
 
 // ---- Helpers ----

@@ -174,27 +174,29 @@ body {
   padding: 20px 16px 0;
 }
 
-/* Navigazione settimana — pill centrata */
+/* Navigazione settimana — frecce separate + pill data centrata */
 .week-nav {
-  display: flex; align-items: center; gap: 0;
+  display: flex; align-items: center; gap: 8px;
   margin-bottom: 20px;
-  background: var(--bg-elevated);
-  border-radius: var(--r-full);
-  align-self: flex-start;
-  width: fit-content;
-  overflow: hidden;
 }
 .week-nav-btn {
-  background: none; border: none; color: var(--text-secondary);
-  cursor: pointer; padding: 8px 12px;
-  display: flex; align-items: center; transition: color .15s, background .15s;
+  background: var(--bg-elevated); border: none; color: var(--text-secondary);
+  cursor: pointer; padding: 6px 10px;
+  border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  transition: color .15s, background .15s;
+  flex-shrink: 0;
 }
 .week-nav-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-highlight); }
 .week-nav-btn:disabled { opacity: .3; cursor: default; }
 .week-date {
   font-size: .83rem; color: var(--text-primary); font-weight: 500;
-  padding: 0 4px;
+  padding: 6px 14px;
+  background: var(--bg-elevated);
+  border-radius: var(--r-full);
   white-space: nowrap;
+  text-align: center;
+  flex: 1;
 }
 
 /* Titolo principale — enorme e bold come nel mockup */
@@ -214,37 +216,55 @@ body {
 }
 
 /* =============================================
-   HOME — AZIONI (download + play/shuffle)
+   HOME — AZIONI (download + shuffle + play su un'unica riga)
    ============================================= */
 .playlist-actions {
   padding: 16px 16px 4px;
-  display: flex; flex-direction: column; gap: 12px;
+}
+.action-main-row {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 12px;
 }
 .action-downloads {
-  display: flex; gap: 10px; flex-wrap: wrap;
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  flex: 1; min-width: 0;
 }
 .btn-action-dl {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 5px;
   background: none; border: none;
   color: var(--text-secondary); cursor: pointer;
-  font-size: .75rem; font-weight: 500; padding: 4px 2px;
+  font-size: .72rem; font-weight: 500; padding: 4px 2px;
   transition: color .15s;
+  white-space: nowrap;
 }
 .btn-action-dl:hover:not(:disabled) { color: var(--text-primary); }
 .btn-action-dl:disabled { opacity: .4; cursor: default; }
 
 .action-play-row {
-  display: flex; align-items: center; gap: 16px;
-  justify-content: flex-end;
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
 }
+
+/* Shuffle: pill con bordo, stile Spotify */
 .btn-shuffle {
-  background: none; border: none;
+  display: flex; align-items: center; gap: 6px;
+  background: transparent;
+  border: 1.5px solid var(--bg-highlight);
   color: var(--text-secondary); cursor: pointer;
-  padding: 6px; border-radius: var(--r-full);
-  display: flex; align-items: center; justify-content: center;
-  transition: color .15s, background .15s;
+  padding: 7px 14px; border-radius: var(--r-full);
+  font-size: .78rem; font-weight: 600;
+  transition: color .15s, border-color .15s, background .15s;
+  white-space: nowrap;
 }
-.btn-shuffle:hover { color: var(--text-primary); background: var(--bg-elevated); }
+.btn-shuffle:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+  background: var(--bg-elevated);
+}
+.btn-shuffle.active {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+}
 
 .btn-play-main {
   width: 56px; height: 56px;
@@ -458,6 +478,67 @@ body {
 .album-detail-footer {
   height: env(safe-area-inset-bottom, 16px);
 }
+
+/* =============================================
+   CONTEXT MENU — BOTTOM SHEET
+   ============================================= */
+.context-sheet {
+  position: fixed; inset: 0; z-index: 500;
+  display: flex; flex-direction: column;
+  justify-content: flex-end;
+}
+.context-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.6);
+  opacity: 0; transition: opacity .25s ease;
+}
+.context-panel {
+  position: relative; z-index: 1;
+  background: var(--bg-elevated);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: 8px 0 calc(16px + env(safe-area-inset-bottom,0px));
+  transform: translateY(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  max-width: 480px; width: 100%; margin: 0 auto;
+}
+
+/* Aperto */
+.context-sheet.open .context-backdrop { opacity: 1; }
+.context-sheet.open .context-panel { transform: translateY(0); }
+
+.context-track-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px 12px;
+}
+.context-thumb {
+  width: 48px; height: 48px;
+  border-radius: var(--r-sm); object-fit: cover;
+  background: var(--bg-base); flex-shrink: 0;
+}
+.context-track-info { min-width: 0; }
+.context-track-name {
+  font-size: .9rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.context-track-artist {
+  font-size: .78rem; color: var(--text-secondary); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.context-divider {
+  height: 1px; background: var(--border-subtle); margin: 0 0 4px;
+}
+.context-item {
+  display: flex; align-items: center; gap: 16px;
+  width: 100%; background: none; border: none;
+  color: var(--text-primary); cursor: pointer;
+  padding: 14px 20px;
+  font-size: .9rem; font-weight: 500;
+  text-align: left;
+  transition: background .15s;
+}
+.context-item svg { color: var(--text-secondary); flex-shrink: 0; }
+.context-item:hover { background: var(--bg-highlight); }
+.context-item:active { background: var(--bg-base); }
 
 /* =============================================
    FOOTER ACTIONS

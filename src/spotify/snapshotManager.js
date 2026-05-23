@@ -71,12 +71,15 @@ export async function forceRefreshSnapshot(onProgress = () => {}) {
 
   onProgress('Cerco la playlist sorgente...');
   const source = await findOrCreateRRSource();
+  console.log(`[SnapshotManager] Playlist sorgente: ${source.id}, tracce riportate: ${source.total}`);
 
   // Scarica tracce (non ci fidiamo di source.total — /me/playlists non lo restituisce sempre)
   onProgress('Scarico le tracce...');
   const rawTracks = await fetchAllPlaylistTracks(source.id);
+  console.log(`[SnapshotManager] Tracce raw lette dalla sorgente: ${rawTracks.length}`);
 
   if (rawTracks.length === 0) {
+    console.warn('[SnapshotManager] Playlist sorgente vuota. L\'utente deve copiarci le tracce.');
     throw new Error('RR_SOURCE_EMPTY');
   }
 
@@ -84,10 +87,16 @@ export async function forceRefreshSnapshot(onProgress = () => {}) {
   const snapshot = await buildSnapshot(rawTracks, source.id);
 
   saveSnapshot(weekKey, snapshot);
+  console.log(`[SnapshotManager] Snapshot ${weekKey} rigenerato (${snapshot.items.length} items).`);
 
-  clearRRSource(source.id).catch(e =>
-    console.warn('[SnapshotManager] Svuotamento sorgente fallito:', e.message)
-  );
+  // Svuota playlist sorgente — loggato come warning se fallisce (non bloccante)
+  onProgress('Svuoto la playlist sorgente...');
+  try {
+    await clearRRSource(source.id);
+    console.log('[SnapshotManager] Playlist sorgente svuotata ✓');
+  } catch (e) {
+    console.warn('[SnapshotManager] Svuotamento sorgente fallito (non bloccante):', e.message);
+  }
 
   return { snapshot, weekKey, fromCache: false };
 }

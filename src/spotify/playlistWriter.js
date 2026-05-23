@@ -31,12 +31,20 @@ export async function findOrCreateExpandedPlaylist() {
   const savedId = getExpandedPlaylistId();
   if (savedId) {
     console.log('[PlaylistWriter] ID playlist espansa trovato in localStorage:', savedId);
-    // Verifica che esista ancora (potrebbe essere stata eliminata dall'utente)
+    // Verifica che esista ancora E che sia modificabile dall'utente corrente
     try {
-      await spotifyFetch(`/playlists/${savedId}?fields=id`);
-      return savedId;
+      const pl = await spotifyFetch(`/playlists/${savedId}?fields=id,owner`);
+      const me = await spotifyFetch('/me?fields=id');
+      if (pl?.owner?.id && me?.id && pl.owner.id !== me.id) {
+        console.warn('[PlaylistWriter] Playlist espansa non appartiene all\'utente corrente — invalido e ricreo.');
+        saveExpandedPlaylistId(null);
+        // Continua con la ricerca per descrizione
+      } else {
+        return savedId;
+      }
     } catch (e) {
-      console.warn('[PlaylistWriter] Playlist salvata non trovata, ricerco...', e.message);
+      console.warn('[PlaylistWriter] Playlist salvata non accessibile (403/404), invalido e ricerco...', e.message);
+      saveExpandedPlaylistId(null);
       // Continua con la ricerca per descrizione
     }
   }

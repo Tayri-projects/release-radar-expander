@@ -91,12 +91,18 @@ export function getExpandedPlaylistId() {
 }
 
 /**
- * Salva l'ID della playlist destinazione.
- * @param {string} id
+ * Salva l'ID della playlist destinazione. Passa null per invalidarlo.
+ * @param {string|null} id
  */
 export function saveExpandedPlaylistId(id) {
   const data = load();
-  data.expanded_playlist_id = id;
-  save(data);
-  console.log('[Storage] ID playlist espansa salvato:', id);
+  if (id === null) {
+    delete data.expanded_playlist_id;
+    save(data);
+    console.log('[Storage] ID playlist espansa invalidato.');
+  } else {
+    data.expanded_playlist_id = id;
+    save(data);
+    console.log('[Storage] ID playlist espansa salvato:', id);
+  }
 }
