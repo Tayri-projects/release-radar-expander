@@ -192,6 +192,86 @@ export async function resolvePlaybackDevice() {
   return { deviceId, source: 'sdk' };
 }
 
+// ---- Stato riproduzione + controlli trasporto (Now Playing bar) ----
+
+/**
+ * Legge lo stato di riproduzione corrente.
+ * GET /me/player → 200 con oggetto playback, oppure 204 (= nessun device attivo)
+ * che spotifyFetch converte in null.
+ * @returns {Promise<object|null>} { is_playing, item, progress_ms, device, ... } o null
+ */
+export async function getPlaybackState() {
+  try {
+    const state = await spotifyFetch('/me/player');
+    if (!state) {
+      console.log('[Player] getPlaybackState: nessun device attivo (204/null)');
+      return null;
+    }
+    console.log('[Player] getPlaybackState:', {
+      is_playing: state.is_playing,
+      track: state.item?.name,
+      uri: state.item?.uri,
+      progress_ms: state.progress_ms,
+    });
+    return state;
+  } catch (e) {
+    console.warn('[Player] getPlaybackState fallito (non bloccante):', e.message);
+    return null;
+  }
+}
+
+/**
+ * Mette in pausa la riproduzione corrente.
+ */
+export async function pausePlayback() {
+  console.log('[Player] PUT /me/player/pause');
+  try {
+    await spotifyFetch('/me/player/pause', { method: 'PUT' });
+  } catch (e) {
+    console.warn('[Player] pausePlayback fallito:', e.message);
+    throw e;
+  }
+}
+
+/**
+ * Riprende la riproduzione (resume) senza body → continua la traccia corrente.
+ */
+export async function resumePlayback() {
+  console.log('[Player] PUT /me/player/play (resume)');
+  try {
+    await spotifyFetch('/me/player/play', { method: 'PUT' });
+  } catch (e) {
+    console.warn('[Player] resumePlayback fallito:', e.message);
+    throw e;
+  }
+}
+
+/**
+ * Traccia successiva.
+ */
+export async function nextTrack() {
+  console.log('[Player] POST /me/player/next');
+  try {
+    await spotifyFetch('/me/player/next', { method: 'POST' });
+  } catch (e) {
+    console.warn('[Player] nextTrack fallito:', e.message);
+    throw e;
+  }
+}
+
+/**
+ * Traccia precedente.
+ */
+export async function previousTrack() {
+  console.log('[Player] POST /me/player/previous');
+  try {
+    await spotifyFetch('/me/player/previous', { method: 'POST' });
+  } catch (e) {
+    console.warn('[Player] previousTrack fallito:', e.message);
+    throw e;
+  }
+}
+
 // ---- Shuffle ----
 
 export async function setShuffleState(state, deviceId) {

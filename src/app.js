@@ -9,9 +9,46 @@ import { loadOrCreateCurrentSnapshot, forceRefreshSnapshot } from './spotify/sna
 import { getCurrentWeekKey } from './spotify/expander.js';
 import { ensurePlaylistSynced, writeExpandedPlaylist } from './spotify/playlistWriter.js';
 import { playWithConnect } from './spotify/player.js';
+import { initNowPlaying, refreshNowPlaying } from './ui/nowPlaying.js';
 import { RR_SOURCE_PLAYLIST_NAME } from './auth/config.js';
 
 console.log('[App] Release Radar Expander avviato');
+
+// ---- Now Playing: stato corrente + highlight riga (verde + equalizzatore) ----
+//
+// La barra Now Playing (ui/nowPlaying.js) emette `rr:nowplaying` con
+// { uri, albumId, isPlaying }. Qui teniamo l'ultimo stato e ridecoriamo il DOM:
+// le righe vengono ricreate ad ogni render, quindi dopo ogni render richiamiamo
+// applyNowPlayingHighlight() per ripristinare l'evidenziazione.
+let currentNowPlaying = null;
+const EQ_HTML = '<span class="eq" aria-hidden="true"><span></span><span></span><span></span></span>';
+
+function decorateRow(row, isPlaying) {
+  row.classList.add('is-playing');
+  if (!isPlaying) row.classList.add('paused');
+  const nameEl = row.querySelector('.track-name, .album-track-name');
+  if (nameEl && !nameEl.querySelector('.eq')) {
+    nameEl.insertAdjacentHTML('afterbegin', EQ_HTML);
+  }
+}
+
+function applyNowPlayingHighlight() {
+  // Pulisci stato precedente
+  document.querySelectorAll('.is-playing').forEach(el => el.classList.remove('is-playing', 'paused'));
+  document.querySelectorAll('.eq').forEach(el => el.remove());
+
+  const detail = currentNowPlaying;
+  if (!detail || !detail.uri) return;
+
+  // Righe singolo + tracce album (match per URI esatto)
+  document.querySelectorAll(`[data-uri="${detail.uri}"]`).forEach(row => decorateRow(row, detail.isPlaying));
+
+  // Riga album in home (match per album id): il brano in play appartiene all'album
+  if (detail.albumId) {
+    document.querySelectorAll(`.album-row[data-album-id="${detail.albumId}"]`)
+      .forEach(row => decorateRow(row, detail.isPlaying));
+  }
+}
 
 // ---- GitHub Pages SPA redirect fix ----
 function restoreGitHubPagesRedirect() {
@@ -280,6 +317,9 @@ function renderHome(user, snapshot, weekKey, fromCache) {
   });
 
   attachTrackListeners(allItems, user, snapshot, weekKey, () => currentFilter);
+
+  // Ripristina l'evidenziazione del brano in riproduzione sul DOM appena renderizzato
+  applyNowPlayingHighlight();
 }
 
 // ---- Render: Album Detail ----
@@ -287,6 +327,20 @@ function renderHome(user, snapshot, weekKey, fromCache) {
 function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter) {
   const a = albumItem.album;
   const typeLabel = a.type === 'compilation' ? 'Compilation' : a.type === 'single' ? 'EP' : 'Album';
+  const primaryArtistId = a.artists?.[0]?.id || null;
+
+  // Item 8: ogni artista è un link allo Spotify dell'artista
+  const artistHtml = a.artists.map(x =>
+    x.id
+      ? `<button class="album-detail-artist-link" data-artist-id="${x.id}">${escHtml(x.name)}</button>`
+      : escHtml(x.name)
+  ).join(', ');
+
+  // Item 10: data di uscita tra "Album" e il numero di tracce.
+  // Vecchi snapshot potrebbero non avere release_date → fallback lazy più sotto.
+  const dateHtml = a.release_date ? ` · ${formatReleaseDate(a.release_date)}` : '';
+
+  const dotsSvg = '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
 
   document.getElementById('app').innerHTML = `
     <div class="album-detail-screen">
@@ -302,8 +356,8 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
 
       <div class="album-detail-meta">
         <h2 class="album-detail-title">${escHtml(a.name)}</h2>
-        <p class="album-detail-artist">${escHtml(a.artists.map(x => x.name).join(', '))}</p>
-        <p class="album-detail-info">${typeLabel} · ${a.tracks_ordered.length} tracce · ${formatDuration(a.total_duration_ms)}</p>
+        <p class="album-detail-artist">${artistHtml}</p>
+        <p class="album-detail-info"><span id="album-release-info">${typeLabel}${dateHtml}</span> · ${a.tracks_ordered.length} tracce · ${formatDuration(a.total_duration_ms)}</p>
       </div>
 
       <div class="album-detail-actions">
@@ -317,15 +371,28 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
 
       <div class="album-tracklist">
         ${a.tracks_ordered.map((t, idx) => `
-          <div class="album-track-row">
+          <div class="album-track-row" data-uri="${t.uri}" data-idx="${idx}">
             <span class="album-track-num">${idx + 1}</span>
             <div class="album-track-info">
               <p class="album-track-name">${escHtml(t.name)}</p>
               <p class="album-track-artist">${escHtml(t.artists.map(x => x.name).join(', '))}</p>
             </div>
             <span class="album-track-dur">${formatTrackDuration(t.duration_ms)}</span>
+            <button class="btn-more" data-idx="${idx}" title="Opzioni">${dotsSvg}</button>
           </div>
         `).join('')}
+      </div>
+
+      <div class="album-extra-actions">
+        <button class="btn-album-action" id="album-dl-btn" disabled title="Download offline non disponibile (limite Spotify Web API / DRM)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Scarica offline</span>
+        </button>
+        ${primaryArtistId ? `
+        <button class="btn-album-action concerts" id="album-concerts-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>Cerca concerti</span>
+        </button>` : ''}
       </div>
 
       <div class="album-detail-footer"></div>
@@ -338,13 +405,202 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
 
   document.getElementById('album-play-btn').addEventListener('click', () => {
     // Punto 4: play sull'album corrente, NON sulla Release Radar mia
-    console.log('[App] album-play-btn → playAlbumContext', albumItem.album.id);
-    playAlbumContext(albumItem.album.id, false);
+    console.log('[App] album-play-btn → playAlbumContext', a.id);
+    playAlbumContext(a.id, false);
   });
 
   document.getElementById('album-shuffle-btn').addEventListener('click', () => {
-    console.log('[App] album-shuffle-btn → playAlbumContext shuffle', albumItem.album.id);
-    playAlbumContext(albumItem.album.id, true);
+    console.log('[App] album-shuffle-btn → playAlbumContext shuffle', a.id);
+    playAlbumContext(a.id, true);
+  });
+
+  // Item 8: click su artista → apre l'artista su Spotify
+  document.querySelectorAll('.album-detail-artist-link').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.artistId;
+      console.log('[App] Apri artista da album detail:', id);
+      if (id) window.open(`spotify:artist:${id}`, '_blank');
+    });
+  });
+
+  // Item 12: cerca concerti → apre la pagina artista su open.spotify.com
+  document.getElementById('album-concerts-btn')?.addEventListener('click', () => {
+    const url = `https://open.spotify.com/artist/${primaryArtistId}`;
+    console.log('[App] Cerca concerti → apro', url);
+    window.open(url, '_blank');
+  });
+
+  // Tap su una traccia → suona l'album partendo da quella traccia (offset)
+  document.querySelectorAll('.album-track-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-more')) return;
+      const idx = parseInt(row.dataset.idx, 10);
+      const t = a.tracks_ordered[idx];
+      if (t) {
+        console.log('[App] Tap traccia album:', t.name, '→ playAlbumFromTrack');
+        playAlbumFromTrack(a.id, t.uri);
+      }
+    });
+  });
+
+  // Item 13: menu 3 puntini sulle tracce dell'album
+  document.querySelectorAll('.album-track-row .btn-more').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.idx, 10);
+      const t = a.tracks_ordered[idx];
+      if (t) showAlbumTrackContextMenu(t, a);
+    });
+  });
+
+  // Item 10 fallback: snapshot vecchio senza release_date → fetch e aggiorna
+  if (!a.release_date) {
+    fillAlbumReleaseDate(a, typeLabel, snapshot, weekKey);
+  }
+
+  // Ripristina evidenziazione brano in riproduzione (se appartiene a questo album)
+  applyNowPlayingHighlight();
+}
+
+/**
+ * Formatta una release_date Spotify ("2026", "2026-05", "2026-05-22")
+ * in una stringa leggibile in italiano.
+ */
+function formatReleaseDate(rd) {
+  if (!rd) return '';
+  const parts = rd.split('-');
+  if (parts.length === 1) return parts[0]; // solo anno
+  const months = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+  const year = parts[0];
+  const mIdx = parseInt(parts[1], 10) - 1;
+  const month = months[mIdx] || '';
+  if (parts.length === 2) return `${month} ${year}`;
+  const day = parseInt(parts[2], 10);
+  return `${day} ${month} ${year}`;
+}
+
+/**
+ * Fallback per snapshot vecchi privi di release_date: scarica i metadati
+ * album, aggiorna la UI e persiste nello snapshot per le volte successive.
+ */
+async function fillAlbumReleaseDate(album, typeLabel, snapshot, weekKey) {
+  console.log('[App] release_date assente, fetch /albums/', album.id);
+  try {
+    const data = await spotifyFetch(`/albums/${album.id}`);
+    const rd = data?.release_date;
+    if (!rd) { console.warn('[App] /albums non ha restituito release_date'); return; }
+    album.release_date = rd;
+    saveSnapshot(weekKey, snapshot);
+    const el = document.getElementById('album-release-info');
+    if (el) el.textContent = `${typeLabel} · ${formatReleaseDate(rd)}`;
+    console.log('[App] release_date aggiornata e persistita:', rd);
+  } catch (e) {
+    console.warn('[App] fillAlbumReleaseDate fallito (non bloccante):', e.message);
+  }
+}
+
+/**
+ * Avvia un album come context partendo da una traccia specifica (offset.uri).
+ */
+async function playAlbumFromTrack(albumId, trackUri) {
+  if (playInProgress) { console.log('[App] Play già in corso, ignoro'); return; }
+  playInProgress = true;
+  console.log(`[App] playAlbumFromTrack: album=${albumId}, da=${trackUri}`);
+  const progressToast = showToast('Avvio...', 'info', Infinity);
+  try {
+    await playWithConnect({
+      contextUri: `spotify:album:${albumId}`,
+      offset: { uri: trackUri },
+      shuffle: false,
+    });
+    dismissInfoToasts();
+    showToast('In riproduzione ✓', 'info', 2000);
+    setTimeout(refreshNowPlaying, 600);
+  } catch (e) {
+    handlePlayError(e);
+  } finally {
+    playInProgress = false;
+  }
+}
+
+/**
+ * Menu contestuale per una traccia di un album (item 13).
+ * A differenza dei singoli: niente "Rimuovi dallo snapshot" (la traccia
+ * fa parte di un album espanso, non è un item rimovibile autonomamente).
+ */
+function showAlbumTrackContextMenu(track, album) {
+  const artistId = track.artists?.[0]?.id;
+  const cover = album.cover || null;
+
+  dismissContextMenu();
+
+  const sheet = document.createElement('div');
+  sheet.className = 'context-sheet';
+  sheet.innerHTML = `
+    <div class="context-backdrop"></div>
+    <div class="context-panel">
+      <div class="context-track-header">
+        <img class="context-thumb" src="${cover || ''}" alt="" onerror="this.style.background='var(--bg-elevated)'">
+        <div class="context-track-info">
+          <p class="context-track-name">${escHtml(track.name)}</p>
+          <p class="context-track-artist">${escHtml(track.artists.map(a => a.name).join(', '))}</p>
+        </div>
+      </div>
+      <div class="context-divider"></div>
+      <button class="context-item" data-action="share"><span>Condividi</span></button>
+      <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
+      ${artistId ? `<button class="context-item" data-action="artist"><span>Vai all'artista</span></button>` : ''}
+      <button class="context-item" data-action="credits"><span>Crediti canzone</span></button>
+    </div>
+  `;
+
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add('open'));
+  sheet.querySelector('.context-backdrop').addEventListener('click', dismissContextMenu);
+
+  sheet.querySelectorAll('.context-item').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action;
+      dismissContextMenu();
+
+      if (action === 'share') {
+        const url = `https://open.spotify.com/track/${track.id}`;
+        if (navigator.share) {
+          try { await navigator.share({ title: track.name, url }); } catch (_) {}
+        } else {
+          try { await navigator.clipboard.writeText(url); showToast('Link copiato ✓'); }
+          catch (_) { showToast('Link: ' + url, 'info', 5000); }
+        }
+      }
+
+      if (action === 'queue') {
+        try {
+          await addToQueue(track.uri);
+          showToast('Aggiunto alla coda ✓', 'info', 2000);
+        } catch (e) {
+          console.error('[App] Errore add to queue:', e);
+          if (e.message === 'SPOTIFY_API_ERROR_404') {
+            showToast('Nessun dispositivo attivo. Avvia Spotify su un dispositivo e riprova.', 'error', Infinity);
+          } else {
+            showToast('Errore coda: ' + e.message, 'error', Infinity);
+          }
+        }
+      }
+
+      if (action === 'artist' && artistId) { window.open(`spotify:artist:${artistId}`, '_blank'); }
+      // Traccia di un album → crediti completi (isSingle=false: mostra Album + Traccia n°)
+      if (action === 'credits') {
+        showTrackCredits({
+          id: track.id,
+          name: track.name,
+          uri: track.uri,
+          artists: track.artists,
+          duration_ms: track.duration_ms,
+          album_cover: cover,
+          album_name: album.name,
+        }, /*isSingle*/ false);
+      }
+    });
   });
 }
 
@@ -413,7 +669,7 @@ function renderTrackList(items, filter) {
   return filtered.map((item, idx) => {
     if (item.type === 'single') {
       return `
-        <div class="track-row single-row" data-idx="${idx}">
+        <div class="track-row single-row" data-idx="${idx}" data-uri="${item.track.uri}">
           <img class="track-thumb" src="${item.track.album_cover || ''}" alt="" loading="lazy" onerror="this.style.background='var(--bg-elevated)'">
           <div class="track-info">
             <p class="track-name">${escHtml(item.track.name)}</p>
@@ -855,6 +1111,7 @@ async function playFullExpanded(items, filter, shuffle) {
 
     dismissInfoToasts();
     showToast('Playlist pronta ✓', 'info', 2000);
+    setTimeout(refreshNowPlaying, 600);
   } catch (e) {
     handlePlayError(e);
   } finally {
@@ -878,6 +1135,7 @@ async function playAlbumContext(albumId, shuffle) {
     });
     dismissInfoToasts();
     showToast('Album in riproduzione ✓', 'info', 2000);
+    setTimeout(refreshNowPlaying, 600);
   } catch (e) {
     handlePlayError(e);
   } finally {
@@ -918,6 +1176,7 @@ async function playSingleFromExpanded(items, filter, targetUri) {
 
     dismissInfoToasts();
     showToast('In riproduzione ✓', 'info', 2000);
+    setTimeout(refreshNowPlaying, 600);
   } catch (e) {
     handlePlayError(e);
   } finally {
@@ -1028,6 +1287,13 @@ async function init() {
   renderLoading('Caricamento profilo...');
   const user = await loadUserProfile();
   if (!user) { renderLoginScreen(); return; }
+
+  // Now Playing: inizializza la barra (una volta sola) e l'highlight delle righe.
+  document.addEventListener('rr:nowplaying', (e) => {
+    currentNowPlaying = e.detail;
+    applyNowPlayingHighlight();
+  });
+  initNowPlaying();
 
   renderLoading('Controllo Release Radar...');
   try {

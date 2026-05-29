@@ -158,6 +158,7 @@ export async function buildSnapshot(rawTracks, playlistId) {
           total_duration_ms: totalDurationMs,
           cover: albumObj.images?.[0]?.url || null,
           type: albumObj.album_type, // "album" | "single" (EP) | "compilation"
+          release_date: albumObj.release_date || null, // item 10
           tracks_ordered: tracksOrdered,
         },
       });

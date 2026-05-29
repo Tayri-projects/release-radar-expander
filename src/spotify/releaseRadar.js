@@ -73,8 +73,9 @@ export async function fetchAllPlaylistTracks(playlistId) {
   // Con la projection `fields=items(track(...))` Spotify rimappa a `track`,
   // ma per robustezza leggiamo anche `.item` come fallback.
   // Nota: album_group rimosso da Feb 2026 — non incluso nei fields.
+  // Aggiunto release_date all'album (item 10: mostra la data di uscita nella vista album)
   const fields = encodeURIComponent(
-    'next,total,items(track(uri,id,name,duration_ms,track_number,artists(id,name),album(id,uri,name,album_type,total_tracks,images,artists(id,name))),item(uri,id,name,duration_ms,track_number,artists(id,name),album(id,uri,name,album_type,total_tracks,images,artists(id,name))))'
+    'next,total,items(track(uri,id,name,duration_ms,track_number,artists(id,name),album(id,uri,name,album_type,total_tracks,images,release_date,artists(id,name))),item(uri,id,name,duration_ms,track_number,artists(id,name),album(id,uri,name,album_type,total_tracks,images,release_date,artists(id,name))))'
   );
 
   while (true) {

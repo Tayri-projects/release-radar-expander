@@ -189,6 +189,7 @@ body {
 
 .playlist-header {
   padding: 20px 16px 0;
+  text-align: center;
 }
 
 /* Navigazione settimana — frecce separate + pill data centrata */
@@ -234,11 +235,12 @@ body {
   width: fit-content;   /* 50% più stretta — non occupa tutta la riga */
 }
 
-/* Titolo principale — enorme e bold come nel mockup */
+/* Titolo principale — elegante e centrato, stile Spotify ufficiale
+   (peso ridotto da 900→700, centrato, tracking morbido) */
 .playlist-title {
-  font-size: 3rem; font-weight: 900;
-  letter-spacing: -1.5px; line-height: 1;
-  margin-bottom: 12px;
+  font-size: 2.1rem; font-weight: 700;
+  letter-spacing: -.4px; line-height: 1.1;
+  margin: 0 auto 12px;
   word-break: break-word;
 }
 .playlist-duration {
@@ -264,16 +266,24 @@ body {
   display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
   flex: 1; min-width: 0;
 }
+/* Pulsanti download — pill reali (bordo + sfondo), ma disabilitati:
+   il download offline è impossibile via Spotify Web API (DRM). Restano
+   come pulsanti veri ma non attivi. */
 .btn-action-dl {
   display: flex; align-items: center; gap: 5px;
-  background: none; border: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-highlight);
   color: var(--text-secondary); cursor: pointer;
-  font-size: .72rem; font-weight: 500; padding: 4px 2px;
-  transition: color .15s;
+  font-size: .72rem; font-weight: 600; padding: 6px 12px;
+  border-radius: var(--r-full);
+  transition: color .15s, background .15s, border-color .15s;
   white-space: nowrap;
 }
-.btn-action-dl:hover:not(:disabled) { color: var(--text-primary); }
-.btn-action-dl:disabled { opacity: .4; cursor: default; }
+.btn-action-dl:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-highlight);
+}
+.btn-action-dl:disabled { opacity: .45; cursor: not-allowed; }
 
 .action-play-row {
   display: flex; align-items: center; gap: 12px;
@@ -451,15 +461,26 @@ body {
 .album-detail-meta {
   padding: 0 20px 16px;
 }
+/* Titolo album — peso ridotto 800→700, tracking morbido, elegante */
 .album-detail-title {
-  font-size: 1.5rem; font-weight: 800;
-  letter-spacing: -.5px; line-height: 1.2;
+  font-size: 1.5rem; font-weight: 700;
+  letter-spacing: -.3px; line-height: 1.2;
   margin-bottom: 6px;
   word-break: break-word;
 }
+/* Artista come link allo Spotify dell'artista (item 8) */
 .album-detail-artist {
   font-size: .9rem; font-weight: 600;
   color: var(--text-secondary); margin-bottom: 6px;
+}
+.album-detail-artist-link {
+  background: none; border: none; padding: 0;
+  font: inherit; color: var(--text-secondary);
+  cursor: pointer; text-align: left;
+  transition: color .15s;
+}
+.album-detail-artist-link:hover {
+  color: var(--text-primary); text-decoration: underline;
 }
 .album-detail-info {
   font-size: .78rem; color: var(--text-subdued);
@@ -479,14 +500,15 @@ body {
   flex: 1;
   padding: 0 0 80px;
 }
+/* Item 11: niente linee divisorie tra le tracce — coerente con la home */
 .album-track-row {
   display: flex; align-items: center;
-  gap: 12px; padding: 12px 20px;
-  border-bottom: 1px solid var(--border-subtle);
+  gap: 12px; padding: 10px 20px;
+  cursor: pointer;
   transition: background .15s;
 }
-.album-track-row:last-child { border-bottom: none; }
 .album-track-row:hover { background: var(--bg-surface); }
+.album-track-row:active { background: var(--bg-elevated); }
 
 .album-track-num {
   font-size: .8rem; color: var(--text-subdued);
@@ -719,3 +741,122 @@ body {
 .btn-text-sm:hover {
   color:var(--text-secondary);
 }
+
+/* =============================================
+   NOW PLAYING BAR (barra di riproduzione in fondo)
+   Vive come sibling di #app → sopravvive ai re-render.
+   ============================================= */
+.now-playing-bar {
+  position: fixed;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  width: calc(100% - 16px);
+  max-width: 464px;
+  background: var(--bg-elevated);
+  border-radius: var(--r-md);
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px 8px 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.55);
+  z-index: 400;
+}
+.now-playing-bar.hidden { display: none; }
+
+.np-cover {
+  width: 44px; height: 44px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--bg-base);
+  flex-shrink: 0;
+}
+.np-info { flex: 1; min-width: 0; }
+.np-title {
+  font-size: .85rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.np-artist {
+  font-size: .74rem; color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px;
+}
+.np-controls {
+  display: flex; align-items: center; gap: 2px;
+  flex-shrink: 0;
+}
+.np-btn {
+  background: none; border: none;
+  color: var(--text-primary); cursor: pointer;
+  padding: 7px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  transition: color .15s, background .15s, transform .1s;
+}
+.np-btn:hover { background: var(--bg-highlight); }
+.np-btn:active { transform: scale(.9); }
+
+/* Spazio extra in fondo quando la barra è presente, così la lista
+   e i footer-actions non finiscono sotto la barra. */
+body.has-now-playing #app { padding-bottom: 76px; }
+
+/* =============================================
+   BRANO IN RIPRODUZIONE — verde + equalizzatore animato
+   ============================================= */
+/* Nome verde (home singoli, righe album in home, tracce album) */
+.is-playing .track-name,
+.is-playing .album-track-name {
+  color: var(--accent-green);
+}
+
+/* Equalizzatore: 3 barrette verticali animate, inline prima del nome.
+   inline-flex così il text-overflow:ellipsis del nome resta funzionante. */
+.eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.eq > span {
+  display: block;
+  width: 2.5px; height: 100%;
+  background: var(--accent-green);
+  border-radius: 1px;
+  transform-origin: bottom;
+  animation: eq-bounce .9s ease-in-out infinite;
+}
+.eq > span:nth-child(1) { animation-delay: -.20s; }
+.eq > span:nth-child(2) { animation-delay: -.55s; }
+.eq > span:nth-child(3) { animation-delay: -.35s; }
+@keyframes eq-bounce {
+  0%, 100% { transform: scaleY(.30); }
+  50%      { transform: scaleY(1); }
+}
+/* In pausa: barrette ferme (animazione in pausa) */
+.is-playing.paused .eq > span { animation-play-state: paused; }
+
+/* =============================================
+   ALBUM DETAIL — footer: download (disabilitato) + cerca concerti
+   ============================================= */
+.album-extra-actions {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 20px 8px;
+}
+.btn-album-action {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-highlight);
+  color: var(--text-primary);
+  border-radius: var(--r-full);
+  padding: 12px 20px;
+  font-size: .85rem; font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+  text-decoration: none;
+}
+.btn-album-action svg { flex-shrink: 0; }
+.btn-album-action:hover:not(:disabled) { background: var(--bg-highlight); }
+.btn-album-action:disabled { opacity: .45; cursor: not-allowed; }
+.btn-album-action.concerts { color: var(--accent-green); }
+.btn-album-action.concerts svg { color: var(--accent-green); }
+.btn-album-action.concerts:hover { border-color: var(--accent-green); }
