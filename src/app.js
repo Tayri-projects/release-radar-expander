@@ -4,10 +4,11 @@
 
 import { login, handleCallback, isLoggedIn, spotifyFetch, refreshAccessToken } from './auth/auth.js';
 import { getAuth, clearAuth, isTokenExpired, getAllSnapshotKeys, getSnapshot, saveSnapshot } from './auth/storage.js';
-import { showToast } from './ui/toast.js';
+import { showToast, dismissInfoToasts, updateToastMessage } from './ui/toast.js';
 import { loadOrCreateCurrentSnapshot, forceRefreshSnapshot } from './spotify/snapshotManager.js';
 import { getCurrentWeekKey } from './spotify/expander.js';
-import { writeExpandedPlaylist } from './spotify/playlistWriter.js';
+import { ensurePlaylistSynced, writeExpandedPlaylist } from './spotify/playlistWriter.js';
+import { playWithConnect } from './spotify/player.js';
 import { RR_SOURCE_PLAYLIST_NAME } from './auth/config.js';
 
 console.log('[App] Release Radar Expander avviato');
@@ -154,7 +155,7 @@ function renderSetupScreen(user) {
       showToast('Release Radar caricata ✓');
     } catch (e) {
       if (e.message === 'RR_SOURCE_EMPTY') {
-        showToast('Playlist ancora vuota. Completa il passaggio 2 su Spotify.', 'error', 4000);
+        showToast('Playlist ancora vuota. Completa il passaggio 2 su Spotify.', 'error', Infinity);
         renderSetupScreen(user);
       } else {
         handleAppError(e);
@@ -249,15 +250,11 @@ function renderHome(user, snapshot, weekKey, fromCache) {
   });
 
   document.getElementById('play-btn').addEventListener('click', () => {
-    const uris = buildExpandedUris(allItems, currentFilter);
-    if (uris.length === 0) { showToast('Nessuna traccia da riprodurre.', 'error'); return; }
-    handlePlay(uris, false);
+    playFullExpanded(allItems, currentFilter, false);
   });
 
   document.getElementById('shuffle-btn').addEventListener('click', () => {
-    const uris = buildExpandedUris(allItems, currentFilter);
-    if (uris.length === 0) { showToast('Nessuna traccia da riprodurre.', 'error'); return; }
-    handlePlay(uris, true);
+    playFullExpanded(allItems, currentFilter, true);
   });
 
   setupWeekNav(user, weekKey);
@@ -340,17 +337,14 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
   });
 
   document.getElementById('album-play-btn').addEventListener('click', () => {
-    const filter = getCurrentFilter();
-    const uris = buildExpandedUris(snapshot.items, filter);
-    if (uris.length === 0) { showToast('Nessuna traccia da riprodurre.', 'error'); return; }
-    handlePlay(uris, false);
+    // Punto 4: play sull'album corrente, NON sulla Release Radar mia
+    console.log('[App] album-play-btn → playAlbumContext', albumItem.album.id);
+    playAlbumContext(albumItem.album.id, false);
   });
 
   document.getElementById('album-shuffle-btn').addEventListener('click', () => {
-    const filter = getCurrentFilter();
-    const uris = buildExpandedUris(snapshot.items, filter);
-    if (uris.length === 0) { showToast('Nessuna traccia da riprodurre.', 'error'); return; }
-    handlePlay(uris, true);
+    console.log('[App] album-shuffle-btn → playAlbumContext shuffle', albumItem.album.id);
+    playAlbumContext(albumItem.album.id, true);
   });
 }
 
@@ -467,11 +461,13 @@ function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) 
     row.addEventListener('click', (e) => {
       if (e.target.closest('.btn-more')) return;
       const idx = parseInt(row.dataset.idx, 10);
-      const filtered = filterItems(items, getCurrentFilter());
+      const filter = getCurrentFilter();
+      const filtered = filterItems(items, filter);
       const item = filtered[idx];
       if (item && item.type === 'single') {
-        console.log('[App] Tap singolo:', item.track.name);
-        handlePlay([item.track.uri], false);
+        // Punto 5: avvia la Release Radar espansa partendo da questo singolo
+        console.log('[App] Tap singolo:', item.track.name, '→ playSingleFromExpanded');
+        playSingleFromExpanded(items, filter, item.track.uri);
       }
     });
   });
@@ -558,21 +554,23 @@ function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurre
       if (action === 'queue') {
         try {
           await addToQueue(track.uri);
-          showToast('Aggiunto alla coda ✓');
+          showToast('Aggiunto alla coda ✓', 'info', 2000);
         } catch (e) {
           console.error('[App] Errore add to queue:', e);
           if (e.message === 'SPOTIFY_API_ERROR_404') {
-            showToast('Nessun dispositivo attivo. Avvia Spotify su un dispositivo e riprova.', 'error', 5000);
+            showToast('Nessun dispositivo attivo. Avvia Spotify su un dispositivo e riprova.', 'error', Infinity);
           } else if (e.message === 'SPOTIFY_API_ERROR_403') {
-            showToast('Permesso negato. Rieffettua il login.', 'error', 4000);
+            showToast('Permesso negato. Rieffettua il login.', 'error', Infinity);
           } else {
-            showToast('Errore coda: ' + e.message, 'error', 3000);
+            showToast('Errore coda: ' + e.message, 'error', Infinity);
           }
         }
       }
 
       if (action === 'artist' && artistId) { window.open(`spotify:artist:${artistId}`, '_blank'); }
-      if (action === 'credits') { showTrackCredits(track); }
+      // Punto 7: i singoli della Release Radar hanno isSingle=true → omette sezioni
+      // ALBUM e Traccia N° nei crediti
+      if (action === 'credits') { showTrackCredits(track, /*isSingle*/ true); }
     });
   });
 }
@@ -634,7 +632,8 @@ function showAlbumContextMenu(item, snapshot, weekKey, user, allItems, getCurren
   });
 }
 
-async function showTrackCredits(track) {
+async function showTrackCredits(track, isSingle = false) {
+  console.log(`[App] showTrackCredits: ${track.name} (isSingle=${isSingle})`);
   dismissContextMenu();
 
   const sheet = document.createElement('div');
@@ -680,6 +679,27 @@ async function showTrackCredits(track) {
   const popularity = extraData?.popularity != null ? `${extraData.popularity}/100` : null;
   const allArtists = extraData?.artists || track.artists;
 
+  // Punto 7: per i SINGOLI omettiamo ALBUM e Traccia N° (non hanno senso).
+  // Per i brani estratti da un album_expansion (isSingle=false), li manteniamo.
+  const albumSection = isSingle
+    ? ''
+    : `<div class="credits-section"><p class="credits-label">Album</p><p class="credits-value">${escHtml(albumName)} ${explicit}</p></div>`;
+
+  // Quando isSingle, la sezione "Traccia n°" viene rimossa: se c'è popolarità la
+  // mostriamo full-width, altrimenti niente seconda riga.
+  let secondRow = '';
+  if (isSingle) {
+    if (popularity) {
+      secondRow = `<div class="credits-section"><p class="credits-label">Popolarità</p><p class="credits-value">${popularity}</p></div>`;
+    }
+  } else {
+    secondRow = `
+      <div class="credits-row">
+        <div class="credits-section half"><p class="credits-label">Traccia n°</p><p class="credits-value">${trackNumber}${discNumber}</p></div>
+        ${popularity ? `<div class="credits-section half"><p class="credits-label">Popolarità</p><p class="credits-value">${popularity}</p></div>` : ''}
+      </div>`;
+  }
+
   creditsBody.innerHTML = `
     <div class="credits-section">
       <p class="credits-label">Artisti</p>
@@ -687,15 +707,12 @@ async function showTrackCredits(track) {
         ${allArtists.map(a => `<button class="credits-artist-btn" data-artist-id="${a.id}">${escHtml(a.name)}</button>`).join('')}
       </div>
     </div>
-    <div class="credits-section"><p class="credits-label">Album</p><p class="credits-value">${escHtml(albumName)} ${explicit}</p></div>
+    ${albumSection}
     <div class="credits-row">
       <div class="credits-section half"><p class="credits-label">Uscita</p><p class="credits-value">${escHtml(releaseDate)}</p></div>
       <div class="credits-section half"><p class="credits-label">Durata</p><p class="credits-value">${duration}</p></div>
     </div>
-    <div class="credits-row">
-      <div class="credits-section half"><p class="credits-label">Traccia n°</p><p class="credits-value">${trackNumber}${discNumber}</p></div>
-      ${popularity ? `<div class="credits-section half"><p class="credits-label">Popolarità</p><p class="credits-value">${popularity}</p></div>` : ''}
-    </div>
+    ${secondRow}
     ${isrc ? `<div class="credits-section"><p class="credits-label">ISRC</p><p class="credits-value credits-mono">${isrc}</p></div>` : ''}
     <div class="context-divider" style="margin: 8px 0"></div>
     <button class="context-item" id="open-spotify-credits"><span>Crediti completi su Spotify</span></button>
@@ -759,49 +776,150 @@ function buildExpandedUris(items, filter) {
 }
 
 // ---- Play ----
+//
+// Tutte le riproduzioni passano da Connect API (PUT /me/player/play).
+// Funzioni:
+//   playFullExpanded(items, filter, shuffle)
+//     → suona TUTTA la Release Radar espansa (usata dal play/shuffle in header)
+//   playAlbumContext(albumId, shuffle)
+//     → suona un album come context, senza toccare la Release Radar mia
+//   playSingleFromExpanded(items, filter, targetUri)
+//     → suona la Release Radar espansa partendo dal singolo cliccato (offset)
+//
+// Tutte gestiscono device resolution + SDK fallback dentro playWithConnect.
 
 let playInProgress = false;
 
-async function handlePlay(uris, shuffle) {
-  if (playInProgress) {
-    showToast('Play già in corso...', 'info', 2000);
+function handlePlayError(e) {
+  console.error('[App] Errore durante play:', e);
+  dismissInfoToasts();
+
+  if (e.message === 'AUTH_EXPIRED') {
+    clearAuth();
+    showToast('Sessione scaduta. Accedi di nuovo.', 'error', Infinity);
+    renderLoginScreen();
     return;
   }
-  playInProgress = true;
-  console.log(`[App] handlePlay: ${uris.length} URI, shuffle=${shuffle}`);
+  if (e.message === 'SPOTIFY_API_ERROR_403') {
+    showToast('Permesso negato. Per usare il play in-app serve Spotify Premium e devi rieffettuare il login (sono cambiati gli scope).', 'error', Infinity);
+    return;
+  }
+  if (e.message === 'SPOTIFY_API_ERROR_404') {
+    showToast('Nessun dispositivo Spotify disponibile. Apri Spotify su un dispositivo o ricarica la pagina per attivare il player web.', 'error', Infinity);
+    return;
+  }
+  if (e.message === 'SDK_ACCOUNT_ERROR') {
+    showToast('Il player web richiede un account Spotify Premium.', 'error', Infinity);
+    return;
+  }
+  if (e.message === 'SDK_INIT_TIMEOUT' || e.message?.startsWith('SDK_')) {
+    showToast('Errore inizializzazione player web: ' + e.message + '. Apri Spotify su un dispositivo e riprova.', 'error', Infinity);
+    return;
+  }
+  showToast('Errore durante la riproduzione: ' + (e.message || 'sconosciuto'), 'error', Infinity);
+}
 
-  showToast('Preparo la playlist...', 'info', 30000);
+/**
+ * Avvia la Release Radar espansa.
+ * Garantisce che la playlist destinazione sia sincronizzata, poi avvia
+ * via context_uri (così l'utente vede l'intera coda su Spotify).
+ */
+async function playFullExpanded(items, filter, shuffle) {
+  if (playInProgress) { console.log('[App] Play già in corso, ignoro'); return; }
+  playInProgress = true;
+
+  const uris = buildExpandedUris(items, filter);
+  console.log(`[App] playFullExpanded: ${uris.length} URI, filter=${filter}, shuffle=${shuffle}`);
+  if (uris.length === 0) {
+    showToast('Nessuna traccia da riprodurre.', 'error', Infinity);
+    playInProgress = false;
+    return;
+  }
+
+  const progressToast = showToast('Preparo la playlist...', 'info', Infinity);
 
   try {
-    const playlistId = await writeExpandedPlaylist(uris, (msg) => {
-      console.log('[App] Play progress:', msg);
-      const toast = document.querySelector('.toast.info');
-      if (toast) toast.textContent = msg;
+    const { playlistId, didWrite } = await ensurePlaylistSynced(uris, (msg) => {
+      console.log('[App] Sync progress:', msg);
+      updateToastMessage(progressToast, msg);
+    });
+    if (didWrite) console.log('[App] Playlist riscritta perché non sincronizzata');
+    else console.log('[App] Playlist già sincronizzata');
+
+    updateToastMessage(progressToast, 'Avvio riproduzione...');
+
+    await playWithConnect({
+      contextUri: `spotify:playlist:${playlistId}`,
+      shuffle: !!shuffle,
     });
 
-    console.log('[App] Playlist scritta, apro Spotify:', playlistId);
-
-    const infoToast = document.querySelector('.toast.info');
-    if (infoToast) { infoToast.style.animation = 'none'; infoToast.remove(); }
-
+    dismissInfoToasts();
     showToast('Playlist pronta ✓', 'info', 2000);
-
-    const deepLink = `spotify:playlist:${playlistId}`;
-    console.log('[App] Deep link:', deepLink);
-    window.location.href = deepLink;
-
   } catch (e) {
-    console.error('[App] Errore durante play:', e);
-    const infoToast = document.querySelector('.toast.info');
-    if (infoToast) infoToast.remove();
+    handlePlayError(e);
+  } finally {
+    playInProgress = false;
+  }
+}
 
-    if (e.message === 'AUTH_EXPIRED') {
-      clearAuth();
-      showToast('Sessione scaduta. Accedi di nuovo.', 'error', 4000);
-      renderLoginScreen();
-    } else {
-      showToast('Errore durante la scrittura della playlist.', 'error', 4000);
-    }
+/**
+ * Avvia un album come context (NON tocca la Release Radar mia).
+ */
+async function playAlbumContext(albumId, shuffle) {
+  if (playInProgress) { console.log('[App] Play già in corso, ignoro'); return; }
+  playInProgress = true;
+  console.log(`[App] playAlbumContext: album=${albumId}, shuffle=${shuffle}`);
+
+  const progressToast = showToast('Avvio album...', 'info', Infinity);
+  try {
+    await playWithConnect({
+      contextUri: `spotify:album:${albumId}`,
+      shuffle: !!shuffle,
+    });
+    dismissInfoToasts();
+    showToast('Album in riproduzione ✓', 'info', 2000);
+  } catch (e) {
+    handlePlayError(e);
+  } finally {
+    playInProgress = false;
+  }
+}
+
+/**
+ * Avvia la Release Radar partendo da uno specifico brano.
+ * Garantisce sync della playlist destinazione, poi context_uri + offset.uri.
+ */
+async function playSingleFromExpanded(items, filter, targetUri) {
+  if (playInProgress) { console.log('[App] Play già in corso, ignoro'); return; }
+  playInProgress = true;
+
+  const uris = buildExpandedUris(items, filter);
+  console.log(`[App] playSingleFromExpanded: target=${targetUri}, totale URI=${uris.length}`);
+
+  if (!uris.includes(targetUri)) {
+    console.warn('[App] targetUri non presente nell\'espansa, fallback su play singolo');
+  }
+
+  const progressToast = showToast('Preparo la playlist...', 'info', Infinity);
+
+  try {
+    const { playlistId, didWrite } = await ensurePlaylistSynced(uris, (msg) => {
+      updateToastMessage(progressToast, msg);
+    });
+    if (didWrite) console.log('[App] Playlist riscritta per sync');
+
+    updateToastMessage(progressToast, 'Avvio riproduzione...');
+
+    await playWithConnect({
+      contextUri: `spotify:playlist:${playlistId}`,
+      offset: { uri: targetUri },
+      shuffle: false,
+    });
+
+    dismissInfoToasts();
+    showToast('In riproduzione ✓', 'info', 2000);
+  } catch (e) {
+    handlePlayError(e);
   } finally {
     playInProgress = false;
   }
@@ -861,10 +979,10 @@ function handleAppError(e) {
   console.error('[App] Errore:', e);
   if (e.message === 'AUTH_EXPIRED') {
     clearAuth();
-    showToast('Sessione scaduta. Accedi di nuovo.', 'error');
+    showToast('Sessione scaduta. Accedi di nuovo.', 'error', Infinity);
     renderLoginScreen();
   } else {
-    showToast('Errore inaspettato. Controlla la console.', 'error');
+    showToast('Errore inaspettato. Controlla la console.', 'error', Infinity);
     renderLoading('Errore — ricarica la pagina');
   }
 }
@@ -893,7 +1011,7 @@ async function init() {
     renderLoading('Completamento accesso Spotify...');
     const success = await handleCallback();
     if (!success) {
-      showToast('Errore durante il login. Riprova.', 'error');
+      showToast('Errore durante il login. Riprova.', 'error', Infinity);
       renderLoginScreen();
       return;
     }
@@ -904,7 +1022,7 @@ async function init() {
   if (isTokenExpired()) {
     renderLoading('Aggiornamento sessione...');
     const newToken = await refreshAccessToken();
-    if (!newToken) { showToast('Sessione scaduta.'); renderLoginScreen(); return; }
+    if (!newToken) { showToast('Sessione scaduta.', 'error', Infinity); renderLoginScreen(); return; }
   }
 
   renderLoading('Caricamento profilo...');

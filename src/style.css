@@ -68,11 +68,28 @@ body {
   font-size: 0.875rem; font-weight: 500;
   box-shadow: 0 4px 16px rgba(0,0,0,.4);
   animation: t-in .25s ease; white-space: nowrap;
+  pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 12px;
+  max-width: calc(100vw - 32px);
 }
+.toast .toast-text {
+  display: inline-block;
+  white-space: normal;
+  word-break: break-word;
+  text-align: left;
+}
+.toast.toast-permanent { white-space: normal; }
+.toast .toast-close {
+  background: transparent; border: 0; color: inherit;
+  font-size: 1.4rem; line-height: 1; cursor: pointer;
+  padding: 0 4px; opacity: 0.85;
+}
+.toast .toast-close:hover { opacity: 1; }
 .toast.error { background: #c0392b; }
 .toast.info  { background: var(--bg-highlight); }
 @keyframes t-in  { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes t-out { from { opacity:1; } to { opacity:0; } }
+@keyframes toast-out { from { opacity:1; } to { opacity:0; } }
 
 /* =============================================
    LOGIN

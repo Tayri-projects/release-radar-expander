@@ -106,3 +106,25 @@ export function saveExpandedPlaylistId(id) {
     console.log('[Storage] ID playlist espansa salvato:', id);
   }
 }
+
+/**
+ * Hash di sincronizzazione: l'hash degli URI scritti l'ultima volta nella
+ * playlist destinazione. Confrontato con l'hash dello snapshot corrente per
+ * decidere se la playlist Spotify è ancora sincronizzata.
+ */
+export function getExpandedPlaylistHash() {
+  return load().expanded_playlist_hash || null;
+}
+
+export function saveExpandedPlaylistHash(hash) {
+  const data = load();
+  if (hash === null || hash === undefined) {
+    delete data.expanded_playlist_hash;
+    save(data);
+    console.log('[Storage] Hash playlist espansa invalidato.');
+  } else {
+    data.expanded_playlist_hash = hash;
+    save(data);
+    console.log('[Storage] Hash playlist espansa salvato:', hash);
+  }
+}

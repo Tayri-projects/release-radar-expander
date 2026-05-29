@@ -11,6 +11,10 @@ export const SPOTIFY_SCOPES = [
   'playlist-modify-private',
   'playlist-modify-public',
   'user-modify-playback-state',
+  'user-read-playback-state',
+  'streaming',
+  'user-read-email',
+  'user-read-private',
 ].join(' ');
 
 export const REDIRECT_URI = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'

@@ -265,7 +265,20 @@ export async function spotifyFetch(endpoint, options = {}, _retryCount = 0) {
   // 204 No Content (es. dopo PUT playlist tracks)
   if (response.status === 204) return null;
 
-  return response.json();
+  // Parsing robust: alcuni endpoint Spotify (es. POST /me/player/queue) rispondono
+  // 200 OK con body vuoto o non-JSON. Eseguiamo response.json() solo se il body
+  // è effettivamente parseable, altrimenti restituiamo null senza throw.
+  const text = await response.text();
+  if (!text || text.trim() === '') {
+    console.log(`[spotifyFetch] ${endpoint}: body vuoto, ritorno null`);
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.warn(`[spotifyFetch] ${endpoint}: body non-JSON (preview: "${text.slice(0, 60)}..."), ritorno null`);
+    return null;
+  }
 }
 
 // ---- Utility ----
