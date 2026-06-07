@@ -4,7 +4,7 @@
 
 import { login, handleCallback, isLoggedIn, spotifyFetch, refreshAccessToken } from './auth/auth.js';
 import { getAuth, clearAuth, isTokenExpired, getAllSnapshotKeys, getSnapshot, saveSnapshot } from './auth/storage.js';
-import { showToast, dismissInfoToasts, updateToastMessage } from './ui/toast.js';
+import { showToast, dismissInfoToasts, dismissAllToasts, updateToastMessage } from './ui/toast.js';
 import { loadOrCreateCurrentSnapshot, forceRefreshSnapshot } from './spotify/snapshotManager.js';
 import { getCurrentWeekKey } from './spotify/expander.js';
 import { ensurePlaylistSynced, writeExpandedPlaylist } from './spotify/playlistWriter.js';
@@ -484,7 +484,7 @@ async function playAlbumFromTrack(albumId, trackUri) {
     showToast('In riproduzione ✓', 'info', 2000);
     setTimeout(refreshNowPlaying, 600);
   } catch (e) {
-    handlePlayError(e);
+    handlePlayError(e, () => playAlbumFromTrack(albumId, trackUri));
   } finally {
     playInProgress = false;
   }
@@ -1013,7 +1013,7 @@ function buildExpandedUris(items, filter) {
 
 let playInProgress = false;
 
-function handlePlayError(e) {
+function handlePlayError(e, onRetry = null) {
   console.error('[App] Errore durante play:', e);
   dismissInfoToasts();
 
@@ -1025,6 +1025,18 @@ function handlePlayError(e) {
   }
   if (e.message === 'SPOTIFY_API_ERROR_403') {
     showToast('Permesso negato. Per usare il play in-app serve Spotify Premium e devi rieffettuare il login (sono cambiati gli scope).', 'error', Infinity);
+    return;
+  }
+  if (e.message === 'NO_DEVICE_MOBILE') {
+    const toast = showToast('Apri l\'app Spotify sul telefono, poi ripremi ▶', 'error', Infinity);
+    if (onRetry) {
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'toast-retry-btn';
+      retryBtn.textContent = 'Riprova';
+      retryBtn.addEventListener('click', () => { dismissAllToasts(); onRetry(); });
+      const closeBtn = toast.querySelector('.toast-close');
+      if (closeBtn) toast.insertBefore(retryBtn, closeBtn);
+    }
     return;
   }
   if (e.message === 'SPOTIFY_API_ERROR_404') {
@@ -1080,7 +1092,7 @@ async function playFullExpanded(items, filter, shuffle) {
     showToast('Playlist pronta ✓', 'info', 2000);
     setTimeout(refreshNowPlaying, 600);
   } catch (e) {
-    handlePlayError(e);
+    handlePlayError(e, () => playFullExpanded(items, filter, shuffle));
   } finally {
     playInProgress = false;
   }
@@ -1104,7 +1116,7 @@ async function playAlbumContext(albumId, shuffle) {
     showToast('Album in riproduzione ✓', 'info', 2000);
     setTimeout(refreshNowPlaying, 600);
   } catch (e) {
-    handlePlayError(e);
+    handlePlayError(e, () => playAlbumContext(albumId, shuffle));
   } finally {
     playInProgress = false;
   }
@@ -1145,7 +1157,7 @@ async function playSingleFromExpanded(items, filter, targetUri) {
     showToast('In riproduzione ✓', 'info', 2000);
     setTimeout(refreshNowPlaying, 600);
   } catch (e) {
-    handlePlayError(e);
+    handlePlayError(e, () => playSingleFromExpanded(items, filter, targetUri));
   } finally {
     playInProgress = false;
   }

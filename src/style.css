@@ -79,6 +79,15 @@ body {
   text-align: left;
 }
 .toast.toast-permanent { white-space: normal; }
+.toast-retry-btn {
+  background: rgba(255,255,255,0.2);
+  border: none; border-radius: var(--r-full);
+  color: inherit; cursor: pointer;
+  font-size: .8rem; font-weight: 700;
+  padding: 4px 12px; white-space: nowrap;
+  transition: background .15s;
+}
+.toast-retry-btn:hover { background: rgba(255,255,255,0.35); }
 .toast .toast-close {
   background: transparent; border: 0; color: inherit;
   font-size: 1.4rem; line-height: 1; cursor: pointer;
