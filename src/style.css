@@ -723,7 +723,7 @@ body {
   width: 0%;
   background: var(--accent-green);
   border-radius: inherit;
-  transition: width 0.5s linear;
+  transition: width 0.2s linear;
 }
 
 .np-cover {

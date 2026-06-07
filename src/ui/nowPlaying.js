@@ -29,6 +29,28 @@ let lastIsPlaying = false;
 let lastUri = null;
 let busyControl = false; // evita doppio click sui controlli mentre l'API risponde
 
+// Interpolazione progresso locale (aggiorna la barra senza toccare l'API)
+let progressTimer = null;
+let localProgressMs = 0;
+let localDurationMs = 0;
+let localProgressTimestamp = 0; // Date.now() dell'ultimo poll
+
+function startProgressInterpolation() {
+  stopProgressInterpolation();
+  progressTimer = setInterval(() => { // 200ms: fluido senza impatto sulle risorse
+    if (!lastIsPlaying || !localDurationMs || !barEl) return;
+    const elapsed = Date.now() - localProgressTimestamp;
+    const estimated = Math.min(localProgressMs + elapsed, localDurationMs);
+    const pct = (estimated / localDurationMs) * 100;
+    const fill = barEl.querySelector('.np-progress-fill');
+    if (fill) fill.style.width = pct + '%';
+  }, 200);
+}
+
+function stopProgressInterpolation() {
+  if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+}
+
 // ---- Icone SVG ----
 const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
 const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
@@ -137,6 +159,7 @@ function updateBar(state) {
     barEl.classList.add('hidden');
     lastIsPlaying = false;
     lastUri = null;
+    stopProgressInterpolation();
     document.body.classList.remove('has-now-playing');
     emitNowPlaying(null);
     return;
@@ -153,13 +176,20 @@ function updateBar(state) {
   barEl.classList.remove('hidden');
   document.body.classList.add('has-now-playing');
 
-  // Aggiorna barra di progressione verde
-  const progressFill = barEl.querySelector('.np-progress-fill');
-  if (progressFill && state?.progress_ms != null && state?.item?.duration_ms) {
-    const pct = Math.min(100, (state.progress_ms / state.item.duration_ms) * 100);
-    progressFill.style.width = pct + '%';
-  } else if (progressFill) {
-    progressFill.style.width = '0%';
+  // Aggiorna stato locale per l'interpolazione della progress bar
+  if (state?.progress_ms != null && state?.item?.duration_ms) {
+    localProgressMs = state.progress_ms;
+    localDurationMs = state.item.duration_ms;
+    localProgressTimestamp = Date.now();
+    // Aggiorna subito la fill con il valore preciso del poll
+    const fill = barEl.querySelector('.np-progress-fill');
+    if (fill) fill.style.width = ((localProgressMs / localDurationMs) * 100) + '%';
+    if (isPlaying) startProgressInterpolation();
+    else stopProgressInterpolation();
+  } else {
+    stopProgressInterpolation();
+    const fill = barEl.querySelector('.np-progress-fill');
+    if (fill) fill.style.width = '0%';
   }
 
   const coverEl = barEl.querySelector('.np-cover');
