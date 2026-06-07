@@ -75,7 +75,8 @@ body {
 .toast .toast-text {
   display: inline-block;
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
   text-align: left;
 }
 .toast.toast-permanent { white-space: normal; }
@@ -94,7 +95,7 @@ body {
   padding: 0 4px; opacity: 0.85;
 }
 .toast .toast-close:hover { opacity: 1; }
-.toast.error { background: #c0392b; }
+.toast.error { background: #c0392b; border-radius: var(--r-lg); }
 .toast.info  { background: var(--bg-highlight); }
 @keyframes t-in  { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes t-out { from { opacity:1; } to { opacity:0; } }
@@ -283,6 +284,7 @@ body {
 }
 .btn-play-main:hover  { background: var(--accent-green-h); }
 .btn-play-main:active { transform: scale(.95); }
+.btn-play-main svg    { margin-left: 2px; } /* correzione ottica triangolo play */
 
 /* =============================================
    HOME — FILTRI CHIP
@@ -770,6 +772,119 @@ body {
 /* Spazio extra in fondo quando la barra è presente, così la lista
    e i footer-actions non finiscono sotto la barra. */
 body.has-now-playing #app { padding-bottom: 76px; }
+
+/* =============================================
+   NOW PLAYING BAR — SCHERMATA ESPANSA (full player)
+   ============================================= */
+
+/* Overlay full-screen */
+.now-playing-bar.expanded {
+  position: fixed; inset: 0; z-index: 600; /* sopra context menu (500), sotto toast (1000) */
+  width: 100%; max-width: 100%;
+  border-radius: 0; height: 100dvh;
+  transform: none; left: 0; bottom: 0;
+  flex-direction: column; align-items: center;
+  justify-content: flex-start;
+  padding: env(safe-area-inset-top, 20px) 28px
+           env(safe-area-inset-bottom, 24px);
+  gap: 0; overflow: hidden;
+}
+/* Nascondi barra di progresso compatta e compact elements quando espanso */
+.now-playing-bar.expanded > .np-progress-track,
+.now-playing-bar.expanded > .np-cover,
+.now-playing-bar.expanded > .np-info,
+.now-playing-bar.expanded > .np-controls { display: none; }
+
+/* Nascondi view espansa quando barra è compatta */
+.now-playing-bar:not(.expanded) .np-expanded-view { display: none; }
+
+/* Layout view espansa */
+.np-expanded-view {
+  display: flex; flex-direction: column; align-items: center;
+  width: 100%; height: 100%;
+}
+
+/* Header: back + titolo contesto */
+.np-exp-header {
+  display: flex; align-items: center;
+  width: 100%; padding: 0 0 12px;
+  flex-shrink: 0;
+}
+.np-exp-close {
+  background: none; border: none; color: inherit;
+  font-size: 1.3rem; cursor: pointer;
+  padding: 8px 8px 8px 0; line-height: 1; opacity: .8;
+  transition: opacity .15s;
+}
+.np-exp-close:hover { opacity: 1; }
+.np-exp-context {
+  flex: 1; text-align: center;
+  font-size: .72rem; font-weight: 700; opacity: .6;
+  text-transform: uppercase; letter-spacing: .1em;
+}
+
+/* Copertina grande */
+.np-exp-artwork {
+  flex: 1; display: flex; align-items: center;
+  justify-content: center; width: 100%; min-height: 0;
+}
+.np-exp-cover {
+  width: min(72vw, 300px); aspect-ratio: 1 / 1;
+  border-radius: var(--r-lg);
+  object-fit: cover;
+  box-shadow: 0 12px 40px rgba(0,0,0,.55);
+}
+
+/* Meta: titolo + artista */
+.np-exp-meta {
+  width: 100%; padding: 20px 0 4px; flex-shrink: 0;
+}
+.np-exp-title {
+  font-size: 1.1rem; font-weight: 700; margin: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.np-exp-artist {
+  font-size: .88rem; opacity: .65; margin: 5px 0 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Progress */
+.np-exp-progress-wrap { width: 100%; padding: 12px 0 4px; flex-shrink: 0; }
+.np-exp-bar {
+  height: 4px; background: rgba(255,255,255,.18); border-radius: 2px;
+}
+.np-exp-fill {
+  height: 100%; width: 0%;
+  background: var(--accent-green); border-radius: inherit;
+  transition: width .2s linear;
+}
+.np-exp-times {
+  display: flex; justify-content: space-between;
+  font-size: .72rem; opacity: .5; margin-top: 6px;
+}
+
+/* Controlli espansi */
+.np-exp-controls {
+  display: flex; align-items: center; justify-content: center;
+  gap: 24px; padding: 16px 0 4px; flex-shrink: 0;
+}
+.np-exp-controls .np-btn {
+  background: none; border: none; color: inherit; cursor: pointer;
+  padding: 10px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, transform .1s;
+}
+.np-exp-controls .np-btn:hover  { background: rgba(255,255,255,.1); }
+.np-exp-controls .np-btn:active { transform: scale(.9); }
+.np-exp-controls .np-exp-playpause {
+  width: 64px; height: 64px;
+  background: var(--accent-green); color: #000;
+  border-radius: 50%;
+}
+.np-exp-controls .np-exp-playpause:hover { background: var(--accent-green-h); }
+
+/* Blocca lo scroll della pagina quando il full player è aperto */
+body.np-fullscreen { overflow: hidden; }
 
 /* =============================================
    BRANO IN RIPRODUZIONE — verde + equalizzatore animato

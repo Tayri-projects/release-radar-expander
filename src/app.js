@@ -949,7 +949,8 @@ async function showTrackCredits(track, isSingle = false) {
   });
 
   document.getElementById('open-spotify-credits')?.addEventListener('click', () => {
-    window.open(`spotify:track:${track.id}`, '_blank');
+    // Usiamo App Link web invece di spotify:track: URI che su Android triggera play dall'inizio
+    window.open(`https://open.spotify.com/track/${track.id}`, '_blank');
   });
 }
 
