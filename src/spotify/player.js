@@ -26,6 +26,18 @@ let sdkReadyPromise = null; // promise che risolve con device_id quando SDK è p
 let sdkPlayer = null;       // riferimento all'oggetto Spotify.Player
 let sdkDeviceId = null;     // device_id dello SDK (quando ready)
 
+// Fix race condition: lo script SDK può essere già in cache dal browser e sparare
+// onSpotifyWebPlaybackSDKReady PRIMA che ensureSDKReady() venga chiamato.
+// Registriamo il callback a livello di modulo così lo intercettiamo sempre.
+let _sdkCallbackFired = false; // true se il callback è già stato sparato
+let _pendingSDKInit = null;     // fn da chiamare quando SDK è pronto (set da ensureSDKReady)
+
+window.onSpotifyWebPlaybackSDKReady = () => {
+  console.log('[Player] onSpotifyWebPlaybackSDKReady (intercept modulo — prima di ensureSDKReady)');
+  _sdkCallbackFired = true;
+  if (typeof _pendingSDKInit === 'function') _pendingSDKInit();
+};
+
 // ---- Devices ----
 
 /**
@@ -87,8 +99,6 @@ export function ensureSDKReady() {
     return sdkReadyPromise;
   }
 
-  injectSDKScript();
-
   sdkReadyPromise = new Promise((resolve, reject) => {
     const TIMEOUT_MS = 12000;
     const timeout = setTimeout(() => {
@@ -96,9 +106,17 @@ export function ensureSDKReady() {
       reject(new Error('SDK_INIT_TIMEOUT'));
     }, TIMEOUT_MS);
 
-    // Spotify chiama questa callback globale quando lo script è caricato
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      console.log('[Player] onSpotifyWebPlaybackSDKReady fired');
+    function initPlayer() {
+      if (sdkPlayer) return; // anti-double-init
+
+      console.log('[Player] Inizializzo Spotify.Player...');
+
+      if (!window.Spotify?.Player) {
+        console.error('[Player] window.Spotify.Player non disponibile');
+        clearTimeout(timeout);
+        reject(new Error('SDK_NOT_AVAILABLE'));
+        return;
+      }
 
       sdkPlayer = new window.Spotify.Player({
         name: SDK_NAME,
@@ -150,10 +168,38 @@ export function ensureSDKReady() {
           reject(new Error('SDK_CONNECT_FAILED'));
         }
       });
+    }
+
+    // Aggiorna il callback globale con la versione che ha accesso a resolve/reject/timeout.
+    // Sovrascrive il placeholder registrato a livello di modulo.
+    _pendingSDKInit = initPlayer;
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      console.log('[Player] onSpotifyWebPlaybackSDKReady fired');
+      _sdkCallbackFired = true;
+      initPlayer();
     };
+
+    // Se il callback era già stato sparato (SDK in cache) → inizializza subito,
+    // altrimenti inietta lo script e aspetta il callback.
+    if (_sdkCallbackFired && window.Spotify?.Player) {
+      console.log('[Player] SDK già disponibile (sparato prima di ensureSDKReady) → init immediato');
+      initPlayer();
+    } else {
+      injectSDKScript();
+    }
   });
 
   return sdkReadyPromise;
+}
+
+// ---- Mobile detection ----
+
+/**
+ * Restituisce true se siamo su un browser mobile (Android/iOS).
+ * Il Web Playback SDK non funziona su browser mobile.
+ */
+function isMobileBrowser() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 // ---- Risoluzione device ----
@@ -162,7 +208,8 @@ export function ensureSDKReady() {
  * Risolve il device su cui suonare:
  *   1. device active → usalo
  *   2. nessuno active ma esistono device → transfer sul primo
- *   3. nessun device → inizializza SDK e usalo
+ *   3. nessun device + desktop → inizializza SDK e usalo
+ *   3. nessun device + mobile → errore immediato (SDK non supportato)
  *
  * @returns {Promise<{deviceId: string, source: 'active'|'transferred'|'sdk'}>}
  */
@@ -184,10 +231,15 @@ export async function resolvePlaybackDevice() {
     return { deviceId: first.id, source: 'transferred' };
   }
 
-  // 3. Nessun device → SDK fallback
+  // 3. Nessun device → su mobile il SDK non funziona, errore immediato
+  if (isMobileBrowser()) {
+    console.warn('[Player] Nessun device e browser mobile → SDK non supportato');
+    throw new Error('NO_DEVICE_MOBILE');
+  }
+
+  // 4. Nessun device + desktop → SDK fallback
   console.log('[Player] Nessun device disponibile, inizializzo SDK...');
   const deviceId = await ensureSDKReady();
-  // Trasferisci esplicitamente il playback sul device SDK
   await transferPlayback(deviceId, false);
   return { deviceId, source: 'sdk' };
 }
