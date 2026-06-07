@@ -90,6 +90,18 @@ export function initNowPlaying() {
   barEl.querySelector('.np-next').addEventListener('click', onNext);
   barEl.querySelector('.np-playpause').addEventListener('click', onPlayPause);
 
+  // Click su cover/titolo/artista → apre il brano su Spotify (senza play)
+  barEl.querySelector('.np-info').addEventListener('click', () => {
+    if (!lastUri) return;
+    const trackId = lastUri.split(':')[2];
+    if (trackId) window.open(`spotify:track:${trackId}`, '_blank');
+  });
+  barEl.querySelector('.np-cover').addEventListener('click', () => {
+    if (!lastUri) return;
+    const trackId = lastUri.split(':')[2];
+    if (trackId) window.open(`spotify:track:${trackId}`, '_blank');
+  });
+
   // Pausa il poller quando la tab non è visibile (risparmio API + batteria)
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {

@@ -949,7 +949,7 @@ async function showTrackCredits(track, isSingle = false) {
   });
 
   document.getElementById('open-spotify-credits')?.addEventListener('click', () => {
-    window.open(`https://open.spotify.com/track/${track.id}`, '_blank');
+    window.open(`spotify:track:${track.id}`, '_blank');
   });
 }
 

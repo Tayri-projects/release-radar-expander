@@ -733,7 +733,8 @@ body {
   background: var(--bg-base);
   flex-shrink: 0;
 }
-.np-info { flex: 1; min-width: 0; }
+.np-info { flex: 1; min-width: 0; cursor: pointer; }
+.np-cover { cursor: pointer; }
 .np-title {
   font-size: .85rem; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
