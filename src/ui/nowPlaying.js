@@ -48,6 +48,9 @@ export function initNowPlaying() {
   barEl.id = 'now-playing-bar';
   barEl.className = 'now-playing-bar hidden';
   barEl.innerHTML = `
+    <div class="np-progress-track">
+      <div class="np-progress-fill"></div>
+    </div>
     <img class="np-cover" alt="" onerror="this.style.visibility='hidden'">
     <div class="np-info">
       <p class="np-title"></p>
@@ -149,6 +152,15 @@ function updateBar(state) {
 
   barEl.classList.remove('hidden');
   document.body.classList.add('has-now-playing');
+
+  // Aggiorna barra di progressione verde
+  const progressFill = barEl.querySelector('.np-progress-fill');
+  if (progressFill && state?.progress_ms != null && state?.item?.duration_ms) {
+    const pct = Math.min(100, (state.progress_ms / state.item.duration_ms) * 100);
+    progressFill.style.width = pct + '%';
+  } else if (progressFill) {
+    progressFill.style.width = '0%';
+  }
 
   const coverEl = barEl.querySelector('.np-cover');
   if (coverEl.getAttribute('src') !== cover) {

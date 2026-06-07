@@ -232,35 +232,15 @@ function renderHome(user, snapshot, weekKey, fromCache) {
 
       <div class="playlist-actions">
         <div class="action-main-row">
-          <div class="action-downloads">
-            <button class="btn-action-dl" title="Scarica tutto" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Scarica Tutto</span>
-            </button>
-            <button class="btn-action-dl" id="dl-singles-btn" title="Solo Singoli" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Singoli</span>
-            </button>
-            <button class="btn-action-dl" id="dl-albums-btn" title="Solo Album" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Album</span>
-            </button>
+          <div class="filter-chips">
+            <button class="chip active" data-filter="all">Tutto</button>
+            <button class="chip" data-filter="singles">Solo Singoli</button>
+            <button class="chip" data-filter="albums">Solo Album</button>
           </div>
-          <div class="action-play-row">
-            <button class="btn-shuffle" id="shuffle-btn" title="Shuffle">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
-            </button>
-            <button class="btn-play-main" id="play-btn">
-              <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </button>
-          </div>
+          <button class="btn-play-main" id="play-btn">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
         </div>
-      </div>
-
-      <div class="filter-chips">
-        <button class="chip active" data-filter="all">Tutto</button>
-        <button class="chip" data-filter="singles">Solo Singoli</button>
-        <button class="chip" data-filter="albums">Solo Album</button>
       </div>
 
       <div class="track-list" id="track-list">
@@ -288,10 +268,6 @@ function renderHome(user, snapshot, weekKey, fromCache) {
 
   document.getElementById('play-btn').addEventListener('click', () => {
     playFullExpanded(allItems, currentFilter, false);
-  });
-
-  document.getElementById('shuffle-btn').addEventListener('click', () => {
-    playFullExpanded(allItems, currentFilter, true);
   });
 
   setupWeekNav(user, weekKey);
@@ -355,15 +331,11 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
       </div>
 
       <div class="album-detail-meta">
-        <h2 class="album-detail-title">${escHtml(a.name)}</h2>
-        <p class="album-detail-artist">${artistHtml}</p>
-        <p class="album-detail-info"><span id="album-release-info">${typeLabel}${dateHtml}</span> · ${a.tracks_ordered.length} tracce · ${formatDuration(a.total_duration_ms)}</p>
-      </div>
-
-      <div class="album-detail-actions">
-        <button class="btn-shuffle album-shuffle" id="album-shuffle-btn" title="Shuffle">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
-        </button>
+        <div class="album-meta-text">
+          <h2 class="album-detail-title">${escHtml(a.name)}</h2>
+          <p class="album-detail-artist">${artistHtml}</p>
+          <p class="album-detail-info"><span id="album-release-info">${typeLabel}${dateHtml}</span> · ${a.tracks_ordered.length} tracce · ${formatDuration(a.total_duration_ms)}</p>
+        </div>
         <button class="btn-play-main" id="album-play-btn">
           <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         </button>
@@ -407,11 +379,6 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
     // Punto 4: play sull'album corrente, NON sulla Release Radar mia
     console.log('[App] album-play-btn → playAlbumContext', a.id);
     playAlbumContext(a.id, false);
-  });
-
-  document.getElementById('album-shuffle-btn').addEventListener('click', () => {
-    console.log('[App] album-shuffle-btn → playAlbumContext shuffle', a.id);
-    playAlbumContext(a.id, true);
   });
 
   // Item 8: click su artista → apre l'artista su Spotify

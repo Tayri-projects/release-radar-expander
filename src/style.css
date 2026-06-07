@@ -253,62 +253,14 @@ body {
 }
 
 /* =============================================
-   HOME — AZIONI (download + shuffle + play su un'unica riga)
+   HOME — AZIONI (filtri + play su un'unica riga)
    ============================================= */
 .playlist-actions {
-  padding: 16px 16px 4px;
+  padding: 12px 16px 4px;
 }
 .action-main-row {
   display: flex; align-items: center;
-  justify-content: space-between; gap: 12px;
-}
-.action-downloads {
-  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-  flex: 1; min-width: 0;
-}
-/* Pulsanti download — pill reali (bordo + sfondo), ma disabilitati:
-   il download offline è impossibile via Spotify Web API (DRM). Restano
-   come pulsanti veri ma non attivi. */
-.btn-action-dl {
-  display: flex; align-items: center; gap: 5px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--bg-highlight);
-  color: var(--text-secondary); cursor: pointer;
-  font-size: .72rem; font-weight: 600; padding: 6px 12px;
-  border-radius: var(--r-full);
-  transition: color .15s, background .15s, border-color .15s;
-  white-space: nowrap;
-}
-.btn-action-dl:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: var(--bg-highlight);
-}
-.btn-action-dl:disabled { opacity: .45; cursor: not-allowed; }
-
-.action-play-row {
-  display: flex; align-items: center; gap: 12px;
-  flex-shrink: 0;
-}
-
-/* Shuffle: pill con bordo, solo icona */
-.btn-shuffle {
-  display: flex; align-items: center; justify-content: center;
-  background: transparent;
-  border: 1.5px solid var(--bg-highlight);
-  color: var(--text-secondary); cursor: pointer;
-  width: 40px; height: 40px;
-  border-radius: var(--r-full);
-  transition: color .15s, border-color .15s, background .15s;
-  flex-shrink: 0;
-}
-.btn-shuffle:hover {
-  color: var(--text-primary);
-  border-color: var(--text-secondary);
-  background: var(--bg-elevated);
-}
-.btn-shuffle.active {
-  color: var(--accent-green);
-  border-color: var(--accent-green);
+  gap: 12px;
 }
 
 .btn-play-main {
@@ -328,7 +280,7 @@ body {
    ============================================= */
 .filter-chips {
   display: flex; gap: 8px;
-  padding: 12px 16px 8px;
+  flex: 1;
   overflow-x: auto; scrollbar-width: none;
 }
 .filter-chips::-webkit-scrollbar { display: none; }
@@ -459,7 +411,11 @@ body {
 }
 
 .album-detail-meta {
-  padding: 0 20px 16px;
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 20px 20px;
+}
+.album-meta-text {
+  flex: 1; min-width: 0;
 }
 /* Titolo album — peso ridotto 800→700, tracking morbido, elegante */
 .album-detail-title {
@@ -484,15 +440,6 @@ body {
 }
 .album-detail-info {
   font-size: .78rem; color: var(--text-subdued);
-}
-
-.album-detail-actions {
-  display: flex; align-items: center; gap: 16px;
-  justify-content: flex-end;
-  padding: 4px 20px 16px;
-}
-.album-shuffle {
-  color: var(--text-secondary);
 }
 
 /* Tracklist album */
@@ -758,8 +705,26 @@ body {
   padding: 8px 10px 8px 8px;
   box-shadow: 0 8px 28px rgba(0,0,0,.55);
   z-index: 400;
+  overflow: hidden;
 }
 .now-playing-bar.hidden { display: none; }
+
+/* Barra di progressione verde in cima alla Now Playing Bar */
+.np-progress-track {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  pointer-events: none;
+}
+.np-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent-green);
+  border-radius: inherit;
+  transition: width 0.5s linear;
+}
 
 .np-cover {
   width: 44px; height: 44px;
