@@ -4,13 +4,14 @@
  * Abilita installabilità PWA.
  */
 
-const CACHE_NAME = 'rr-expander-v1';
+const CACHE_NAME = 'rr-expander-v2';
+const BASE = '/release-radar-expander';
 
 // Asset dello shell da cachare all'install
 const SHELL_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/manifest.json',
 ];
 
 self.addEventListener('install', (event) => {
@@ -43,7 +44,7 @@ self.addEventListener('fetch', (event) => {
   // Navigazione (HTML) → network-first, fallback cache
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
+      fetch(request).catch(() => caches.match(BASE + '/index.html'))
     );
     return;
   }
