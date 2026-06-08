@@ -107,7 +107,17 @@ export async function handleCallback() {
       access_token: tokens.access_token?.slice(0, 20) + '...',
       refresh_token: tokens.refresh_token?.slice(0, 20) + '...',
       expires_in: tokens.expires_in,
+      scope: tokens.scope,   // ← scope effettivamente concesso da Spotify
     });
+    // Verifica scope richiesti vs concessi
+    const required = ['user-library-read', 'user-library-modify'];
+    const granted = (tokens.scope || '').split(' ');
+    const missing = required.filter(s => !granted.includes(s));
+    if (missing.length) {
+      console.warn('[Auth] ⚠️ Scope MANCANTI nel token:', missing.join(', '));
+    } else {
+      console.log('[Auth] ✓ Tutti gli scope library presenti');
+    }
 
     saveAuth(tokens);
     sessionStorage.removeItem(VERIFIER_KEY);
