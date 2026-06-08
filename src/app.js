@@ -949,8 +949,8 @@ async function showTrackCredits(track, isSingle = false) {
   });
 
   document.getElementById('open-spotify-credits')?.addEventListener('click', () => {
-    // Usiamo App Link web invece di spotify:track: URI che su Android triggera play dall'inizio
-    window.open(`https://open.spotify.com/track/${track.id}`, '_blank');
+    // Apre il brano nell'app Spotify nativa (senza triggerare play se il brano è già in coda)
+    window.open(`spotify:track:${track.id}`, '_blank');
   });
 }
 
@@ -1035,8 +1035,11 @@ function handlePlayError(e, onRetry = null) {
       retryBtn.className = 'toast-retry-btn';
       retryBtn.textContent = 'Riprova';
       retryBtn.addEventListener('click', () => { dismissAllToasts(); onRetry(); });
-      const closeBtn = toast.querySelector('.toast-close');
-      if (closeBtn) toast.insertBefore(retryBtn, closeBtn);
+      // Inserisce Riprova nella riga azioni (prima del ×), creata da toast.js
+      const actionsRow = toast.querySelector('.toast-actions-row');
+      const closeBtn = actionsRow?.querySelector('.toast-close') || toast.querySelector('.toast-close');
+      const target = closeBtn?.parentNode || toast;
+      target.insertBefore(retryBtn, closeBtn);
     }
     return;
   }

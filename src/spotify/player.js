@@ -299,6 +299,21 @@ export async function resumePlayback() {
 }
 
 /**
+ * Salta a una posizione specifica nel brano corrente.
+ * @param {number} positionMs - posizione in millisecondi
+ */
+export async function seekTo(positionMs) {
+  const qs = new URLSearchParams({ position_ms: Math.round(positionMs) });
+  console.log(`[Player] PUT /me/player/seek?${qs.toString()}`);
+  try {
+    await spotifyFetch(`/me/player/seek?${qs.toString()}`, { method: 'PUT' });
+  } catch (e) {
+    console.warn('[Player] seekTo fallito:', e.message);
+    throw e;
+  }
+}
+
+/**
  * Traccia successiva.
  */
 export async function nextTrack() {

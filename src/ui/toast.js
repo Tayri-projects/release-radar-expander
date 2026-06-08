@@ -56,12 +56,17 @@ export function showToast(message, type = 'info', durationMs = 3000) {
   toast.appendChild(text);
 
   if (finalPermanent) {
+    // Riga azioni in fondo al toast: [Riprova (opzionale, aggiunto da app.js)] [×]
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'toast-actions-row';
+
     const closeBtn = document.createElement('button');
     closeBtn.className = 'toast-close';
     closeBtn.setAttribute('aria-label', 'Chiudi');
     closeBtn.innerHTML = '×';
     closeBtn.addEventListener('click', () => removeToast(toast));
-    toast.appendChild(closeBtn);
+    actionsRow.appendChild(closeBtn);
+    toast.appendChild(actionsRow);
     toast.classList.add('toast-permanent');
   }
 

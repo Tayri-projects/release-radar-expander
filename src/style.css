@@ -95,7 +95,17 @@ body {
   padding: 0 4px; opacity: 0.85;
 }
 .toast .toast-close:hover { opacity: 1; }
-.toast.error { background: #c0392b; border-radius: var(--r-lg); }
+/* Toast errore: testo sopra, pulsanti (Riprova + ×) sulla riga in fondo a destra */
+.toast.error {
+  background: #c0392b; border-radius: var(--r-lg);
+  flex-direction: column; align-items: stretch; gap: 8px;
+}
+.toast.error .toast-text { white-space: normal; }
+/* Riga azioni in basso (condivisa da tutti i toast permanenti, visibile solo in error) */
+.toast-actions-row {
+  display: flex; justify-content: flex-end;
+  align-items: center; gap: 8px;
+}
 .toast.info  { background: var(--bg-highlight); }
 @keyframes t-in  { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes t-out { from { opacity:1; } to { opacity:0; } }
@@ -785,7 +795,7 @@ body.has-now-playing #app { padding-bottom: 76px; }
   transform: none; left: 0; bottom: 0;
   flex-direction: column; align-items: center;
   justify-content: flex-start;
-  padding: env(safe-area-inset-top, 20px) 28px
+  padding: env(safe-area-inset-top, 6px) 28px
            env(safe-area-inset-bottom, 24px);
   gap: 0; overflow: hidden;
 }
@@ -807,7 +817,7 @@ body.has-now-playing #app { padding-bottom: 76px; }
 /* Header: back + titolo contesto */
 .np-exp-header {
   display: flex; align-items: center;
-  width: 100%; padding: 0 0 12px;
+  width: 100%; padding: 4px 0 6px;
   flex-shrink: 0;
 }
 .np-exp-close {
@@ -825,8 +835,8 @@ body.has-now-playing #app { padding-bottom: 76px; }
 
 /* Copertina grande */
 .np-exp-artwork {
-  flex: 1; display: flex; align-items: center;
-  justify-content: center; width: 100%; min-height: 0;
+  flex: 0 0 auto; display: flex; align-items: center;
+  justify-content: center; width: 100%;
 }
 .np-exp-cover {
   width: min(72vw, 300px); aspect-ratio: 1 / 1;
@@ -835,9 +845,24 @@ body.has-now-playing #app { padding-bottom: 76px; }
   box-shadow: 0 12px 40px rgba(0,0,0,.55);
 }
 
+/* Pulsante "Apri in Spotify" sotto la copertina */
+.np-exp-open-spotify {
+  background: none;
+  border: 1px solid rgba(255,255,255,.2);
+  color: var(--text-primary);
+  border-radius: var(--r-full);
+  font-size: .78rem; font-weight: 600;
+  padding: 6px 18px; margin-top: 12px;
+  cursor: pointer; letter-spacing: .02em;
+  flex-shrink: 0;
+  transition: border-color .15s, opacity .15s;
+}
+.np-exp-open-spotify:hover { border-color: rgba(255,255,255,.5); }
+.np-exp-open-spotify:active { opacity: .7; }
+
 /* Meta: titolo + artista */
 .np-exp-meta {
-  width: 100%; padding: 20px 0 4px; flex-shrink: 0;
+  width: 100%; padding: 14px 0 4px; flex-shrink: 0;
 }
 .np-exp-title {
   font-size: 1.1rem; font-weight: 700; margin: 0;
@@ -848,10 +873,14 @@ body.has-now-playing #app { padding-bottom: 76px; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Progress */
-.np-exp-progress-wrap { width: 100%; padding: 12px 0 4px; flex-shrink: 0; }
+/* Progress — area cliccabile allargata per touch */
+.np-exp-progress-wrap {
+  width: 100%; padding: 10px 0 2px; flex-shrink: 0;
+  cursor: pointer;
+}
 .np-exp-bar {
   height: 4px; background: rgba(255,255,255,.18); border-radius: 2px;
+  pointer-events: none; /* i click vengono catturati dal wrap sopra */
 }
 .np-exp-fill {
   height: 100%; width: 0%;
@@ -866,7 +895,7 @@ body.has-now-playing #app { padding-bottom: 76px; }
 /* Controlli espansi */
 .np-exp-controls {
   display: flex; align-items: center; justify-content: center;
-  gap: 24px; padding: 16px 0 4px; flex-shrink: 0;
+  gap: 24px; padding: 12px 0 4px; flex-shrink: 0;
 }
 .np-exp-controls .np-btn {
   background: none; border: none; color: inherit; cursor: pointer;

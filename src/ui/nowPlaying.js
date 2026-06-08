@@ -19,7 +19,7 @@
  */
 
 import {
-  getPlaybackState, pausePlayback, resumePlayback, nextTrack, previousTrack,
+  getPlaybackState, pausePlayback, resumePlayback, seekTo, nextTrack, previousTrack,
 } from '../spotify/player.js';
 
 const POLL_ACTIVE_MS = 3000;   // quando c'è playback attivo
@@ -120,6 +120,7 @@ export function initNowPlaying() {
       <div class="np-exp-artwork">
         <img class="np-exp-cover" alt="" onerror="this.style.visibility='hidden'">
       </div>
+      <button class="np-exp-open-spotify" title="Apri in Spotify">Apri in Spotify</button>
       <div class="np-exp-meta">
         <p class="np-exp-title"></p>
         <p class="np-exp-artist"></p>
@@ -154,6 +155,16 @@ export function initNowPlaying() {
   barEl.querySelector('.np-exp-next').addEventListener('click', onNext);
   barEl.querySelector('.np-exp-playpause').addEventListener('click', onPlayPause);
   barEl.querySelector('.np-exp-close').addEventListener('click', closeFullPlayer);
+
+  // "Apri in Spotify" nel full player
+  barEl.querySelector('.np-exp-open-spotify')?.addEventListener('click', openInSpotifyApp);
+
+  // Progress bar interattiva — seek per click o touch
+  const progressWrap = barEl.querySelector('.np-exp-progress-wrap');
+  progressWrap?.addEventListener('click', e => onSeekProgress(e.clientX, progressWrap));
+  progressWrap?.addEventListener('touchend', e => {
+    if (e.changedTouches.length) onSeekProgress(e.changedTouches[0].clientX, progressWrap);
+  }, { passive: true });
 
   // Pausa il poller quando la tab non è visibile (risparmio API + batteria)
   document.addEventListener('visibilitychange', () => {
@@ -326,6 +337,41 @@ function updateBar(state) {
 
 function emitNowPlaying(detail) {
   document.dispatchEvent(new CustomEvent(EVENT_NAME, { detail }));
+}
+
+// ---- Apri in Spotify app ----
+
+function openInSpotifyApp() {
+  if (!lastUri) return;
+  // lastUri è "spotify:track:xxx" — l'URI nativo apre il player Spotify senza triggerare play
+  const trackId = lastUri.split(':')[2];
+  console.log('[NowPlaying] apertura Spotify app, trackId:', trackId);
+  window.open(`spotify:track:${trackId}`, '_blank');
+}
+
+// ---- Seek barra di progressione ----
+
+async function onSeekProgress(clientX, wrapEl) {
+  if (!localDurationMs || !wrapEl) return;
+  const rect = wrapEl.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  const positionMs = Math.round(ratio * localDurationMs);
+  console.log(`[NowPlaying] seek → ${positionMs}ms (${Math.round(ratio * 100)}%)`);
+
+  // Aggiorna visivamente subito — senza aspettare la risposta API
+  localProgressMs = positionMs;
+  localProgressTimestamp = Date.now();
+  const pct = ratio * 100;
+  const expFill = barEl?.querySelector('.np-exp-fill');
+  if (expFill) expFill.style.width = pct + '%';
+  const expElapsed = barEl?.querySelector('.np-exp-elapsed');
+  if (expElapsed) expElapsed.textContent = formatTime(positionMs);
+
+  try {
+    await seekTo(positionMs);
+  } catch (e) {
+    console.warn('[NowPlaying] seek fallito:', e.message);
+  }
 }
 
 // ---- Controlli ----
