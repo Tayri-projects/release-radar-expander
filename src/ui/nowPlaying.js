@@ -342,11 +342,9 @@ function emitNowPlaying(detail) {
 // ---- Apri in Spotify app ----
 
 function openInSpotifyApp() {
-  if (!lastUri) return;
-  // lastUri è "spotify:track:xxx" — l'URI nativo apre il player Spotify senza triggerare play
-  const trackId = lastUri.split(':')[2];
-  console.log('[NowPlaying] apertura Spotify app, trackId:', trackId);
-  window.open(`spotify:track:${trackId}`, '_blank');
+  // Apre semplicemente l'app Spotify (home/now playing)
+  console.log('[NowPlaying] apertura Spotify app');
+  window.open('spotify:', '_blank');
 }
 
 // ---- Seek barra di progressione ----
