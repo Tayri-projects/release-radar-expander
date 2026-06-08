@@ -39,8 +39,11 @@ export async function login() {
     scope: SPOTIFY_SCOPES,
     code_challenge_method: 'S256',
     code_challenge: challenge,
-    // state opzionale — aggiungiamo per sicurezza (CSRF basic)
     state: crypto.randomUUID(),
+    // Forza sempre la schermata di consenso Spotify → garantisce che vengano
+    // concessi tutti gli scope aggiornati (senza show_dialog Spotify può
+    // ri-emettere silenziosamente un token con gli scope vecchi)
+    show_dialog: 'true',
   });
 
   const authUrl = `${SPOTIFY_AUTH_URL}?${params.toString()}`;
