@@ -8,11 +8,13 @@ import { showToast, dismissInfoToasts, dismissAllToasts, updateToastMessage } fr
 import { loadOrCreateCurrentSnapshot, forceRefreshSnapshot } from './spotify/snapshotManager.js';
 import { getCurrentWeekKey } from './spotify/expander.js';
 import { ensurePlaylistSynced, writeExpandedPlaylist } from './spotify/playlistWriter.js';
-import { playWithConnect } from './spotify/player.js';
+import { playWithConnect, saveTrack, removeTrack, checkSavedTracks } from './spotify/player.js';
 import { initNowPlaying, refreshNowPlaying } from './ui/nowPlaying.js';
 import { RR_SOURCE_PLAYLIST_NAME } from './auth/config.js';
 
 console.log('[App] Release Radar Expander avviato');
+
+const HEART_FULL_SVG = '<svg viewBox="0 0 24 24" fill="#e8375a" stroke="#e8375a" stroke-width="2" width="18" height="18"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
 
 // ---- Now Playing: stato corrente + highlight riga (verde + equalizzatore) ----
 //
@@ -263,6 +265,7 @@ function renderHome(user, snapshot, weekKey, fromCache) {
       chip.classList.add('active');
       document.getElementById('track-list').innerHTML = renderTrackList(allItems, currentFilter);
       attachTrackListeners(allItems, user, snapshot, weekKey, () => currentFilter);
+      attachHeartIcons();
     });
   });
 
@@ -293,6 +296,7 @@ function renderHome(user, snapshot, weekKey, fromCache) {
   });
 
   attachTrackListeners(allItems, user, snapshot, weekKey, () => currentFilter);
+  attachHeartIcons();
 
   // Ripristina l'evidenziazione del brano in riproduzione sul DOM appena renderizzato
   applyNowPlayingHighlight();
@@ -343,7 +347,7 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
 
       <div class="album-tracklist">
         ${a.tracks_ordered.map((t, idx) => `
-          <div class="album-track-row" data-uri="${t.uri}" data-idx="${idx}">
+          <div class="album-track-row" data-uri="${t.uri}" data-idx="${idx}" data-track-id="${t.id}">
             <span class="album-track-num">${idx + 1}</span>
             <div class="album-track-info">
               <p class="album-track-name">${escHtml(t.name)}</p>
@@ -427,6 +431,7 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
 
   // Ripristina evidenziazione brano in riproduzione (se appartiene a questo album)
   applyNowPlayingHighlight();
+  attachHeartIcons();
 }
 
 /**
@@ -495,11 +500,18 @@ async function playAlbumFromTrack(albumId, trackUri) {
  * A differenza dei singoli: niente "Rimuovi dallo snapshot" (la traccia
  * fa parte di un album espanso, non è un item rimovibile autonomamente).
  */
-function showAlbumTrackContextMenu(track, album) {
+async function showAlbumTrackContextMenu(track, album) {
   const artistId = track.artists?.[0]?.id;
   const cover = album.cover || null;
 
   dismissContextMenu();
+
+  // Controlla stato preferiti prima di mostrare il menu
+  let isSaved = false;
+  try {
+    const results = await checkSavedTracks([track.id]);
+    isSaved = results[0] || false;
+  } catch (_) {}
 
   const sheet = document.createElement('div');
   sheet.className = 'context-sheet';
@@ -515,6 +527,7 @@ function showAlbumTrackContextMenu(track, album) {
       </div>
       <div class="context-divider"></div>
       <button class="context-item" data-action="share"><span>Condividi</span></button>
+      <button class="context-item" data-action="save-toggle"><span>${isSaved ? '♥ Rimuovi dai preferiti' : '♡ Aggiungi ai preferiti'}</span></button>
       <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
       ${artistId ? `<button class="context-item" data-action="artist"><span>Vai all'artista</span></button>` : ''}
       <button class="context-item" data-action="credits"><span>Crediti canzone</span></button>
@@ -551,6 +564,24 @@ function showAlbumTrackContextMenu(track, album) {
           } else {
             showToast('Errore coda: ' + e.message, 'error', Infinity);
           }
+        }
+      }
+
+      if (action === 'save-toggle') {
+        try {
+          if (isSaved) {
+            await removeTrack(track.id);
+            isSaved = false;
+            showToast('Rimosso dai preferiti ✓', 'info', 2000);
+          } else {
+            await saveTrack(track.id);
+            isSaved = true;
+            showToast('Aggiunto ai preferiti ✓', 'info', 2000);
+          }
+          updateTrackHeartInList(track.id, isSaved);
+          document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId: track.id, isSaved } }));
+        } catch (e) {
+          showToast('Errore preferiti: ' + e.message, 'error', Infinity);
         }
       }
 
@@ -626,6 +657,65 @@ function renderEmptyWeek(user, weekKey, allKeys, currentIdx) {
   }
 }
 
+// ---- Cuori / Preferiti nella lista tracce ----
+
+function createHeartButton(trackId) {
+  const btn = document.createElement('button');
+  btn.className = 'btn-heart';
+  btn.dataset.trackId = trackId;
+  btn.title = 'Rimuovi dai preferiti';
+  btn.innerHTML = HEART_FULL_SVG;
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try {
+      await removeTrack(trackId);
+      btn.remove();
+      showToast('Rimosso dai preferiti ✓', 'info', 2000);
+      document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId, isSaved: false } }));
+    } catch (err) {
+      showToast('Errore rimozione preferiti: ' + err.message, 'error', Infinity);
+    }
+  });
+  return btn;
+}
+
+function updateTrackHeartInList(trackId, saved) {
+  const row = document.querySelector(`[data-track-id="${trackId}"]`);
+  if (!row) return;
+  const existing = row.querySelector('.btn-heart');
+  if (saved && !existing) {
+    const moreBtn = row.querySelector('.btn-more');
+    if (moreBtn) row.insertBefore(createHeartButton(trackId), moreBtn);
+  } else if (!saved && existing) {
+    existing.remove();
+  }
+}
+
+async function attachHeartIcons() {
+  const rows = document.querySelectorAll('[data-track-id]');
+  if (!rows.length) return;
+  const ids = [...rows].map(r => r.dataset.trackId).filter(Boolean);
+  if (!ids.length) return;
+
+  // Batch da 50 (limite API)
+  const allResults = [];
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    const res = await checkSavedTracks(batch);
+    allResults.push(...res);
+  }
+
+  ids.forEach((id, i) => {
+    if (allResults[i]) updateTrackHeartInList(id, true);
+  });
+}
+
+// Sincronizza cuori lista quando il cuore della now playing bar viene toggleato
+document.addEventListener('rr:savedchanged', (e) => {
+  const { trackId, isSaved } = e.detail || {};
+  if (trackId) updateTrackHeartInList(trackId, isSaved);
+});
+
 // ---- Track list rendering ----
 
 function renderTrackList(items, filter) {
@@ -636,7 +726,7 @@ function renderTrackList(items, filter) {
   return filtered.map((item, idx) => {
     if (item.type === 'single') {
       return `
-        <div class="track-row single-row" data-idx="${idx}" data-uri="${item.track.uri}">
+        <div class="track-row single-row" data-idx="${idx}" data-uri="${item.track.uri}" data-track-id="${item.track.id}">
           <img class="track-thumb" src="${item.track.album_cover || ''}" alt="" loading="lazy" onerror="this.style.background='var(--bg-elevated)'">
           <div class="track-info">
             <p class="track-name">${escHtml(item.track.name)}</p>
@@ -722,11 +812,18 @@ function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) 
 
 // ---- Context menu bottom sheet ----
 
-function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurrentFilter) {
+async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurrentFilter) {
   const track = item.track;
   const artistId = track.artists?.[0]?.id;
 
   dismissContextMenu();
+
+  // Controlla stato preferiti prima di mostrare il menu
+  let isSaved = false;
+  try {
+    const results = await checkSavedTracks([track.id]);
+    isSaved = results[0] || false;
+  } catch (_) {}
 
   const sheet = document.createElement('div');
   sheet.className = 'context-sheet';
@@ -742,6 +839,7 @@ function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurre
       </div>
       <div class="context-divider"></div>
       <button class="context-item" data-action="share"><span>Condividi</span></button>
+      <button class="context-item" data-action="save-toggle"><span>${isSaved ? '♥ Rimuovi dai preferiti' : '♡ Aggiungi ai preferiti'}</span></button>
       <button class="context-item" data-action="remove"><span>Rimuovi dallo snapshot</span></button>
       <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
       ${artistId ? `<button class="context-item" data-action="artist"><span>Vai all'artista</span></button>` : ''}
@@ -787,6 +885,24 @@ function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurre
           } else {
             showToast('Errore coda: ' + e.message, 'error', Infinity);
           }
+        }
+      }
+
+      if (action === 'save-toggle') {
+        try {
+          if (isSaved) {
+            await removeTrack(track.id);
+            isSaved = false;
+            showToast('Rimosso dai preferiti ✓', 'info', 2000);
+          } else {
+            await saveTrack(track.id);
+            isSaved = true;
+            showToast('Aggiunto ai preferiti ✓', 'info', 2000);
+          }
+          updateTrackHeartInList(track.id, isSaved);
+          document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId: track.id, isSaved } }));
+        } catch (e) {
+          showToast('Errore preferiti: ' + e.message, 'error', Infinity);
         }
       }
 

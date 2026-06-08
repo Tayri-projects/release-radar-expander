@@ -339,6 +339,60 @@ export async function previousTrack() {
   }
 }
 
+// ---- Libreria (Liked Songs) ----
+
+/**
+ * Salva una traccia nei preferiti (Liked Songs).
+ * @param {string} trackId
+ */
+export async function saveTrack(trackId) {
+  console.log('[Player] PUT /me/tracks', trackId);
+  try {
+    await spotifyFetch('/me/tracks', {
+      method: 'PUT',
+      body: JSON.stringify({ ids: [trackId] }),
+    });
+  } catch (e) {
+    console.warn('[Player] saveTrack fallito:', e.message);
+    throw e;
+  }
+}
+
+/**
+ * Rimuove una traccia dai preferiti.
+ * @param {string} trackId
+ */
+export async function removeTrack(trackId) {
+  console.log('[Player] DELETE /me/tracks', trackId);
+  try {
+    await spotifyFetch('/me/tracks', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [trackId] }),
+    });
+  } catch (e) {
+    console.warn('[Player] removeTrack fallito:', e.message);
+    throw e;
+  }
+}
+
+/**
+ * Controlla se le tracce sono nei preferiti.
+ * @param {string[]} ids - array di track ID (max 50)
+ * @returns {Promise<boolean[]>}
+ */
+export async function checkSavedTracks(ids) {
+  if (!ids || ids.length === 0) return [];
+  const qs = new URLSearchParams({ ids: ids.slice(0, 50).join(',') });
+  console.log(`[Player] GET /me/tracks/contains?${qs.toString()}`);
+  try {
+    const result = await spotifyFetch(`/me/tracks/contains?${qs.toString()}`);
+    return Array.isArray(result) ? result : ids.map(() => false);
+  } catch (e) {
+    console.warn('[Player] checkSavedTracks fallito:', e.message);
+    return ids.map(() => false);
+  }
+}
+
 // ---- Shuffle ----
 
 export async function setShuffleState(state, deviceId) {

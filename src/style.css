@@ -730,14 +730,15 @@ body {
 }
 .now-playing-bar.hidden { display: none; }
 
-/* Barra di progressione verde in cima alla Now Playing Bar */
+/* Barra di progressione verde in cima alla Now Playing Bar — cliccabile per seek */
 .np-progress-track {
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 3px;
+  height: 6px;
   background: rgba(255,255,255,0.08);
   border-radius: var(--r-md) var(--r-md) 0 0;
-  pointer-events: none;
+  cursor: pointer;
+  z-index: 1;
 }
 .np-progress-fill {
   height: 100%;
@@ -772,7 +773,7 @@ body {
 .np-btn {
   background: none; border: none;
   color: var(--text-primary); cursor: pointer;
-  padding: 7px; border-radius: var(--r-full);
+  padding: 8px; border-radius: var(--r-full);
   display: flex; align-items: center; justify-content: center;
   transition: color .15s, background .15s, transform .1s;
 }
@@ -783,137 +784,25 @@ body {
    e i footer-actions non finiscono sotto la barra. */
 body.has-now-playing #app { padding-bottom: 76px; }
 
-/* =============================================
-   NOW PLAYING BAR — SCHERMATA ESPANSA (full player)
-   ============================================= */
-
-/* Overlay full-screen */
-.now-playing-bar.expanded {
-  position: fixed; inset: 0; z-index: 600; /* sopra context menu (500), sotto toast (1000) */
-  width: 100%; max-width: 100%;
-  border-radius: 0; height: 100dvh;
-  transform: none; left: 0; bottom: 0;
-  flex-direction: column; align-items: center;
-  justify-content: flex-start;
-  padding: env(safe-area-inset-top, 6px) 28px
-           env(safe-area-inset-bottom, 24px);
-  gap: 0; overflow: hidden;
-}
-/* Nascondi barra di progresso compatta e compact elements quando espanso */
-.now-playing-bar.expanded > .np-progress-track,
-.now-playing-bar.expanded > .np-cover,
-.now-playing-bar.expanded > .np-info,
-.now-playing-bar.expanded > .np-controls { display: none; }
-
-/* Nascondi view espansa quando barra è compatta */
-.now-playing-bar:not(.expanded) .np-expanded-view { display: none; }
-
-/* Layout view espansa */
-.np-expanded-view {
-  display: flex; flex-direction: column; align-items: center;
-  width: 100%; height: 100%;
-}
-
-/* Header: back + titolo contesto */
-.np-exp-header {
-  display: flex; align-items: center;
-  width: 100%; padding: 4px 0 6px;
+/* ---- Cuore nella Now Playing Bar ---- */
+.np-heart {
   flex-shrink: 0;
+  opacity: .85;
+  transition: opacity .15s, transform .1s;
 }
-.np-exp-close {
-  background: none; border: none; color: inherit;
-  font-size: 1.3rem; cursor: pointer;
-  padding: 8px 8px 8px 0; line-height: 1; opacity: .8;
-  transition: opacity .15s;
-}
-.np-exp-close:hover { opacity: 1; }
-.np-exp-context {
-  flex: 1; text-align: center;
-  font-size: .72rem; font-weight: 700; opacity: .6;
-  text-transform: uppercase; letter-spacing: .1em;
-}
+.np-heart:hover { opacity: 1; }
+.np-heart:active { transform: scale(.85); }
 
-/* Copertina grande */
-.np-exp-artwork {
-  flex: 0 0 auto; display: flex; align-items: center;
-  justify-content: center; width: 100%;
-}
-.np-exp-cover {
-  width: min(72vw, 300px); aspect-ratio: 1 / 1;
-  border-radius: var(--r-lg);
-  object-fit: cover;
-  box-shadow: 0 12px 40px rgba(0,0,0,.55);
-}
-
-/* Pulsante "Apri in Spotify" sotto la copertina */
-.np-exp-open-spotify {
-  background: none;
-  border: 1px solid rgba(255,255,255,.2);
-  color: var(--text-primary);
-  border-radius: var(--r-full);
-  font-size: .78rem; font-weight: 600;
-  padding: 6px 18px; margin-top: 12px;
-  cursor: pointer; letter-spacing: .02em;
+/* ---- Cuore nelle righe traccia ---- */
+.btn-heart {
+  background: none; border: none;
+  color: #e8375a; cursor: pointer;
+  padding: 6px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  transition: border-color .15s, opacity .15s;
+  transition: transform .1s, opacity .15s;
 }
-.np-exp-open-spotify:hover { border-color: rgba(255,255,255,.5); }
-.np-exp-open-spotify:active { opacity: .7; }
-
-/* Meta: titolo + artista */
-.np-exp-meta {
-  width: 100%; padding: 14px 0 4px; flex-shrink: 0;
-}
-.np-exp-title {
-  font-size: 1.1rem; font-weight: 700; margin: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.np-exp-artist {
-  font-size: .88rem; opacity: .65; margin: 5px 0 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* Progress — area cliccabile allargata per touch */
-.np-exp-progress-wrap {
-  width: 100%; padding: 10px 0 2px; flex-shrink: 0;
-  cursor: pointer;
-}
-.np-exp-bar {
-  height: 4px; background: rgba(255,255,255,.18); border-radius: 2px;
-  pointer-events: none; /* i click vengono catturati dal wrap sopra */
-}
-.np-exp-fill {
-  height: 100%; width: 0%;
-  background: var(--accent-green); border-radius: inherit;
-  transition: width .2s linear;
-}
-.np-exp-times {
-  display: flex; justify-content: space-between;
-  font-size: .72rem; opacity: .5; margin-top: 6px;
-}
-
-/* Controlli espansi */
-.np-exp-controls {
-  display: flex; align-items: center; justify-content: center;
-  gap: 24px; padding: 12px 0 4px; flex-shrink: 0;
-}
-.np-exp-controls .np-btn {
-  background: none; border: none; color: inherit; cursor: pointer;
-  padding: 10px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  transition: background .15s, transform .1s;
-}
-.np-exp-controls .np-btn:hover  { background: rgba(255,255,255,.1); }
-.np-exp-controls .np-btn:active { transform: scale(.9); }
-.np-exp-controls .np-exp-playpause {
-  width: 64px; height: 64px;
-  background: var(--accent-green); color: #000;
-  border-radius: 50%;
-}
-.np-exp-controls .np-exp-playpause:hover { background: var(--accent-green-h); }
-
-/* Blocca lo scroll della pagina quando il full player è aperto */
-body.np-fullscreen { overflow: hidden; }
+.btn-heart:active { transform: scale(.85); }
 
 /* =============================================
    BRANO IN RIPRODUZIONE — verde + equalizzatore animato
