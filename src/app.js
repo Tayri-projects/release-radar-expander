@@ -506,13 +506,6 @@ async function showAlbumTrackContextMenu(track, album) {
 
   dismissContextMenu();
 
-  // Controlla stato preferiti prima di mostrare il menu
-  let isSaved = false;
-  try {
-    const results = await checkSavedTracks([track.id]);
-    isSaved = results[0] || false;
-  } catch (_) {}
-
   const sheet = document.createElement('div');
   sheet.className = 'context-sheet';
   sheet.innerHTML = `
@@ -527,7 +520,6 @@ async function showAlbumTrackContextMenu(track, album) {
       </div>
       <div class="context-divider"></div>
       <button class="context-item" data-action="share"><span>Condividi</span></button>
-      <button class="context-item" data-action="save-toggle"><span>${isSaved ? '♥ Rimuovi dai preferiti' : '♡ Aggiungi ai preferiti'}</span></button>
       <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
       ${artistId ? `<button class="context-item" data-action="artist"><span>Vai all'artista</span></button>` : ''}
       <button class="context-item" data-action="credits"><span>Crediti canzone</span></button>
@@ -564,24 +556,6 @@ async function showAlbumTrackContextMenu(track, album) {
           } else {
             showToast('Errore coda: ' + e.message, 'error', Infinity);
           }
-        }
-      }
-
-      if (action === 'save-toggle') {
-        try {
-          if (isSaved) {
-            await removeTrack(track.id);
-            isSaved = false;
-            showToast('Rimosso dai preferiti ✓', 'info', 2000);
-          } else {
-            await saveTrack(track.id);
-            isSaved = true;
-            showToast('Aggiunto ai preferiti ✓', 'info', 2000);
-          }
-          updateTrackHeartInList(track.id, isSaved);
-          document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId: track.id, isSaved } }));
-        } catch (e) {
-          showToast('Errore preferiti: ' + e.message, 'error', Infinity);
         }
       }
 
@@ -818,13 +792,6 @@ async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, ge
 
   dismissContextMenu();
 
-  // Controlla stato preferiti prima di mostrare il menu
-  let isSaved = false;
-  try {
-    const results = await checkSavedTracks([track.id]);
-    isSaved = results[0] || false;
-  } catch (_) {}
-
   const sheet = document.createElement('div');
   sheet.className = 'context-sheet';
   sheet.innerHTML = `
@@ -839,7 +806,6 @@ async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, ge
       </div>
       <div class="context-divider"></div>
       <button class="context-item" data-action="share"><span>Condividi</span></button>
-      <button class="context-item" data-action="save-toggle"><span>${isSaved ? '♥ Rimuovi dai preferiti' : '♡ Aggiungi ai preferiti'}</span></button>
       <button class="context-item" data-action="remove"><span>Rimuovi dallo snapshot</span></button>
       <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
       ${artistId ? `<button class="context-item" data-action="artist"><span>Vai all'artista</span></button>` : ''}
@@ -885,24 +851,6 @@ async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, ge
           } else {
             showToast('Errore coda: ' + e.message, 'error', Infinity);
           }
-        }
-      }
-
-      if (action === 'save-toggle') {
-        try {
-          if (isSaved) {
-            await removeTrack(track.id);
-            isSaved = false;
-            showToast('Rimosso dai preferiti ✓', 'info', 2000);
-          } else {
-            await saveTrack(track.id);
-            isSaved = true;
-            showToast('Aggiunto ai preferiti ✓', 'info', 2000);
-          }
-          updateTrackHeartInList(track.id, isSaved);
-          document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId: track.id, isSaved } }));
-        } catch (e) {
-          showToast('Errore preferiti: ' + e.message, 'error', Infinity);
         }
       }
 

@@ -784,15 +784,6 @@ body {
    e i footer-actions non finiscono sotto la barra. */
 body.has-now-playing #app { padding-bottom: 76px; }
 
-/* ---- Cuore nella Now Playing Bar ---- */
-.np-heart {
-  flex-shrink: 0;
-  opacity: .85;
-  transition: opacity .15s, transform .1s;
-}
-.np-heart:hover { opacity: 1; }
-.np-heart:active { transform: scale(.85); }
-
 /* ---- Cuore nelle righe traccia ---- */
 .btn-heart {
   background: none; border: none;

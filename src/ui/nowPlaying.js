@@ -19,7 +19,7 @@
 
 import {
   getPlaybackState, pausePlayback, resumePlayback, seekTo,
-  nextTrack, previousTrack, saveTrack, removeTrack, checkSavedTracks,
+  nextTrack, previousTrack,
 } from '../spotify/player.js';
 
 const POLL_ACTIVE_MS = 3000;
@@ -37,10 +37,6 @@ let progressTimer = null;
 let localProgressMs = 0;
 let localDurationMs = 0;
 let localProgressTimestamp = 0;
-
-// Stato preferiti
-let isSaved = false;
-let savedCheckTrackId = null;
 
 // ---- Helper ----
 
@@ -74,8 +70,6 @@ const ICON_PLAY  = '<svg viewBox="0 0 24 24" fill="currentColor" width="24" heig
 const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
 const ICON_PREV  = '<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><polygon points="19 20 9 12 19 4 19 20"/><rect x="5" y="4" width="2.5" height="16" rx="1"/></svg>';
 const ICON_NEXT  = '<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><polygon points="5 4 15 12 5 20 5 4"/><rect x="16.5" y="4" width="2.5" height="16" rx="1"/></svg>';
-const ICON_HEART_EMPTY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
-const ICON_HEART_FULL  = '<svg viewBox="0 0 24 24" fill="#e8375a" stroke="#e8375a" stroke-width="2" width="20" height="20"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
 
 // ---- Init ----
 
@@ -98,7 +92,6 @@ export function initNowPlaying() {
       <p class="np-title"></p>
       <p class="np-artist"></p>
     </div>
-    <button class="np-btn np-heart" title="Aggiungi ai preferiti">${ICON_HEART_EMPTY}</button>
     <div class="np-controls">
       <button class="np-btn np-prev" title="Precedente">${ICON_PREV}</button>
       <button class="np-btn np-playpause" title="Play/Pausa">${ICON_PLAY}</button>
@@ -111,9 +104,6 @@ export function initNowPlaying() {
   barEl.querySelector('.np-prev').addEventListener('click', onPrev);
   barEl.querySelector('.np-next').addEventListener('click', onNext);
   barEl.querySelector('.np-playpause').addEventListener('click', onPlayPause);
-
-  // Cuore
-  barEl.querySelector('.np-heart').addEventListener('click', onHeartClick);
 
   // Click su cover / info (lato sinistro) → apre app Spotify
   const openSpotify = () => { console.log('[NowPlaying] apertura Spotify'); window.open('spotify:', '_blank'); };
@@ -195,8 +185,6 @@ function updateBar(state) {
     barEl.classList.add('hidden');
     lastIsPlaying = false;
     lastUri = null;
-    savedCheckTrackId = null;
-    isSaved = false;
     stopProgressInterpolation();
     document.body.classList.remove('has-now-playing');
     emitNowPlaying(null);
@@ -244,19 +232,6 @@ function updateBar(state) {
   barEl.querySelector('.np-artist').textContent = artist;
   barEl.querySelector('.np-playpause').innerHTML = isPlaying ? ICON_PAUSE : ICON_PLAY;
 
-  // Aggiorna cuore se la traccia è cambiata
-  if (trackId && trackId !== savedCheckTrackId) {
-    savedCheckTrackId = trackId;
-    isSaved = false;
-    updateHeartUI();
-    checkSavedTracks([trackId]).then(results => {
-      if (trackId === savedCheckTrackId) {
-        isSaved = results[0] || false;
-        updateHeartUI();
-      }
-    }).catch(() => {});
-  }
-
   const changed = isPlaying !== lastIsPlaying || uri !== lastUri;
   lastIsPlaying = isPlaying;
   lastUri = uri;
@@ -269,39 +244,6 @@ function updateBar(state) {
 
 function emitNowPlaying(detail) {
   document.dispatchEvent(new CustomEvent(EVENT_NAME, { detail }));
-}
-
-// ---- Cuore / Preferiti ----
-
-function updateHeartUI() {
-  const heartBtn = barEl?.querySelector('.np-heart');
-  if (!heartBtn) return;
-  heartBtn.innerHTML = isSaved ? ICON_HEART_FULL : ICON_HEART_EMPTY;
-  heartBtn.title = isSaved ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
-}
-
-async function onHeartClick() {
-  if (!savedCheckTrackId) return;
-  const wasIsSaved = isSaved;
-  isSaved = !isSaved; // aggiorna ottimisticamente
-  updateHeartUI();
-  try {
-    if (wasIsSaved) {
-      await removeTrack(savedCheckTrackId);
-      console.log('[NowPlaying] rimosso dai preferiti:', savedCheckTrackId);
-    } else {
-      await saveTrack(savedCheckTrackId);
-      console.log('[NowPlaying] aggiunto ai preferiti:', savedCheckTrackId);
-    }
-    // Sincronizza il cuore nella lista tracce se visibile
-    document.dispatchEvent(new CustomEvent('rr:savedchanged', {
-      detail: { trackId: savedCheckTrackId, isSaved },
-    }));
-  } catch (e) {
-    console.warn('[NowPlaying] heart toggle fallito:', e.message);
-    isSaved = wasIsSaved; // ripristina in caso di errore
-    updateHeartUI();
-  }
 }
 
 // ---- Seek ----
