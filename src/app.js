@@ -401,15 +401,16 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
     window.open(url, '_blank');
   });
 
-  // Tap su una traccia → suona l'album partendo da quella traccia (offset)
+  // Tap su una traccia → rotazione dell'INTERA Release Radar espansa partendo
+  // da questa traccia dell'album (la traccia è già nella lista piatta espansa).
   document.querySelectorAll('.album-track-row').forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('.btn-more')) return;
       const idx = parseInt(row.dataset.idx, 10);
       const t = a.tracks_ordered[idx];
       if (t) {
-        console.log('[App] Tap traccia album:', t.name, '→ playAlbumFromTrack');
-        playAlbumFromTrack(a.id, t.uri);
+        console.log('[App] Tap traccia album:', t.name, '→ playRotatedFromExpanded');
+        playRotatedFromExpanded(snapshot.items, getCurrentFilter(), t.uri);
       }
     });
   });
@@ -468,30 +469,6 @@ async function fillAlbumReleaseDate(album, typeLabel, snapshot, weekKey) {
     console.log('[App] release_date aggiornata e persistita:', rd);
   } catch (e) {
     console.warn('[App] fillAlbumReleaseDate fallito (non bloccante):', e.message);
-  }
-}
-
-/**
- * Avvia un album come context partendo da una traccia specifica (offset.uri).
- */
-async function playAlbumFromTrack(albumId, trackUri) {
-  if (playInProgress) { console.log('[App] Play già in corso, ignoro'); return; }
-  playInProgress = true;
-  console.log(`[App] playAlbumFromTrack: album=${albumId}, da=${trackUri}`);
-  const progressToast = showToast('Avvio...', 'info', Infinity);
-  try {
-    await playWithConnect({
-      contextUri: `spotify:album:${albumId}`,
-      offset: { uri: trackUri },
-      shuffle: false,
-    });
-    dismissInfoToasts();
-    showToast('In riproduzione ✓', 'info', 2000);
-    setTimeout(refreshNowPlaying, 600);
-  } catch (e) {
-    handlePlayError(e, () => playAlbumFromTrack(albumId, trackUri));
-  } finally {
-    playInProgress = false;
   }
 }
 
@@ -752,9 +729,9 @@ function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) 
       const filtered = filterItems(items, filter);
       const item = filtered[idx];
       if (item && item.type === 'single') {
-        // Punto 5: avvia la Release Radar espansa partendo da questo singolo
-        console.log('[App] Tap singolo:', item.track.name, '→ playSingleFromExpanded');
-        playSingleFromExpanded(items, filter, item.track.uri);
+        // Punto 5: avvia la Release Radar espansa con rotazione da questo singolo
+        console.log('[App] Tap singolo:', item.track.name, '→ playRotatedFromExpanded');
+        playRotatedFromExpanded(items, filter, item.track.uri);
       }
     });
   });
@@ -1063,6 +1040,15 @@ function buildExpandedUris(items, filter) {
   return uris;
 }
 
+// Ruota la lista piatta in modo che targetUri sia il primo elemento,
+// riattaccando in coda gli elementi che lo precedevano.
+// Es: rotateUris(['t1','t2','a1','t3'], 't3') → ['t3','t1','t2','a1'].
+function rotateUris(uris, targetUri) {
+  const idx = uris.indexOf(targetUri);
+  if (idx <= 0) return uris.slice(); // non trovato o già primo → invariata
+  return uris.slice(idx).concat(uris.slice(0, idx));
+}
+
 // ---- Play ----
 //
 // Tutte le riproduzioni passano da Connect API (PUT /me/player/play).
@@ -1071,8 +1057,9 @@ function buildExpandedUris(items, filter) {
 //     → suona TUTTA la Release Radar espansa (usata dal play/shuffle in header)
 //   playAlbumContext(albumId, shuffle)
 //     → suona un album come context, senza toccare la Release Radar mia
-//   playSingleFromExpanded(items, filter, targetUri)
-//     → suona la Release Radar espansa partendo dal singolo cliccato (offset)
+//   playRotatedFromExpanded(items, filter, targetUri)
+//     → suona la Release Radar espansa con rotazione dal brano cliccato
+//       (dal brano fino in fondo, poi i precedenti riattaccati in coda)
 //
 // Tutte gestiscono device resolution + SDK fallback dentro playWithConnect.
 
@@ -1191,18 +1178,31 @@ async function playAlbumContext(albumId, shuffle) {
 }
 
 /**
- * Avvia la Release Radar partendo da uno specifico brano.
- * Garantisce sync della playlist destinazione, poi context_uri + offset.uri.
+ * Avvia la Release Radar espansa partendo da uno specifico brano, con
+ * rotazione/wrap-around: la coda parte dal brano cliccato, prosegue fino alla
+ * fine, poi riattacca in coda i brani che lo precedevano (album sempre espansi).
+ * Es. click su T3: T3, T4, …, Tlast, T1, T2, A1, A2, AX.
+ *
+ * Per ottenere il wrap-around scriviamo nella playlist destinazione la lista
+ * GIÀ ruotata e la riproduciamo come context dalla posizione 0 (niente offset:
+ * l'offset suonerebbe solo dal brano alla fine, senza riattaccare i precedenti).
+ * Usata sia dal click sui singoli sia dal click sulle tracce in dettaglio album.
  */
-async function playSingleFromExpanded(items, filter, targetUri) {
+async function playRotatedFromExpanded(items, filter, targetUri) {
   if (playInProgress) { console.log('[App] Play già in corso, ignoro'); return; }
   playInProgress = true;
 
-  const uris = buildExpandedUris(items, filter);
-  console.log(`[App] playSingleFromExpanded: target=${targetUri}, totale URI=${uris.length}`);
+  const full = buildExpandedUris(items, filter);
+  const uris = rotateUris(full, targetUri);
+  console.log(`[App] playRotatedFromExpanded: target=${targetUri}, totale URI=${uris.length}`);
 
-  if (!uris.includes(targetUri)) {
-    console.warn('[App] targetUri non presente nell\'espansa, fallback su play singolo');
+  if (uris.length === 0) {
+    showToast('Nessuna traccia da riprodurre.', 'error', Infinity);
+    playInProgress = false;
+    return;
+  }
+  if (!full.includes(targetUri)) {
+    console.warn('[App] targetUri non presente nell\'espansa: riproduco dall\'inizio');
   }
 
   const progressToast = showToast('Preparo la playlist...', 'info', Infinity);
@@ -1217,7 +1217,6 @@ async function playSingleFromExpanded(items, filter, targetUri) {
 
     await playWithConnect({
       contextUri: `spotify:playlist:${playlistId}`,
-      offset: { uri: targetUri },
       shuffle: false,
     });
 
@@ -1225,7 +1224,7 @@ async function playSingleFromExpanded(items, filter, targetUri) {
     showToast('In riproduzione ✓', 'info', 2000);
     setTimeout(refreshNowPlaying, 600);
   } catch (e) {
-    handlePlayError(e, () => playSingleFromExpanded(items, filter, targetUri));
+    handlePlayError(e, () => playRotatedFromExpanded(items, filter, targetUri));
   } finally {
     playInProgress = false;
   }
