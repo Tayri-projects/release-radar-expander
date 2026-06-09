@@ -61,6 +61,34 @@ export function isTokenExpired() {
   return Date.now() >= auth.expires_at;
 }
 
+// ---- Ultimo device usato ----
+
+/**
+ * Legge l'ID dell'ultimo device Spotify su cui si è riprodotto con successo.
+ * Usato per riprovare la riproduzione quando /me/player/devices risulta vuoto
+ * (es. app Spotify in background non listata ma ancora raggiungibile via Connect).
+ * @returns {string|null}
+ */
+export function getLastDeviceId() {
+  return load().last_device_id || null;
+}
+
+/**
+ * Salva l'ID dell'ultimo device funzionante. Passa null/undefined per invalidarlo.
+ * @param {string|null} id
+ */
+export function saveLastDeviceId(id) {
+  const data = load();
+  if (id) {
+    if (data.last_device_id === id) return; // evita scritture inutili
+    data.last_device_id = id;
+  } else {
+    if (!data.last_device_id) return;
+    delete data.last_device_id;
+  }
+  save(data);
+}
+
 // ---- Snapshots ----
 
 export function getSnapshot(weekKey) {

@@ -1080,16 +1080,27 @@ function handlePlayError(e, onRetry = null) {
     return;
   }
   if (e.message === 'NO_DEVICE_MOBILE') {
-    const toast = showToast('Apri l\'app Spotify sul telefono, poi ripremi ▶', 'error', Infinity);
+    const toast = showToast('Apri Spotify (portalo in primo piano), poi premi Riprova.', 'error', Infinity);
+    const actionsRow = toast.querySelector('.toast-actions-row');
+    const closeBtn = actionsRow?.querySelector('.toast-close') || toast.querySelector('.toast-close');
+    const target = closeBtn?.parentNode || toast;
+
+    // "Apri Spotify": porta l'app Spotify in primo piano così si registra come
+    // device Connect. Deep link alla Release Radar (apre l'app anche se chiusa).
+    const openBtn = document.createElement('button');
+    openBtn.className = 'toast-retry-btn';
+    openBtn.textContent = 'Apri Spotify';
+    openBtn.addEventListener('click', () => {
+      window.open('spotify:playlist:37i9dQZEVXbhvRdPuaKypU', '_blank');
+    });
+    target.insertBefore(openBtn, closeBtn);
+
     if (onRetry) {
       const retryBtn = document.createElement('button');
       retryBtn.className = 'toast-retry-btn';
       retryBtn.textContent = 'Riprova';
       retryBtn.addEventListener('click', () => { dismissAllToasts(); onRetry(); });
       // Inserisce Riprova nella riga azioni (prima del ×), creata da toast.js
-      const actionsRow = toast.querySelector('.toast-actions-row');
-      const closeBtn = actionsRow?.querySelector('.toast-close') || toast.querySelector('.toast-close');
-      const target = closeBtn?.parentNode || toast;
       target.insertBefore(retryBtn, closeBtn);
     }
     return;
