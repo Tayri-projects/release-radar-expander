@@ -1192,7 +1192,14 @@ async function playRotatedFromExpanded(items, filter, targetUri) {
   if (playInProgress) { console.log('[App] Play già in corso, ignoro'); return; }
   playInProgress = true;
 
-  const full = buildExpandedUris(items, filter);
+  // Se il brano cliccato è escluso dal filtro attivo (es. traccia di album con
+  // filtro 'singles'), si usa la lista completa così la rotazione parte comunque
+  // dal brano giusto invece di riprodurre dall'inizio.
+  let full = buildExpandedUris(items, filter);
+  if (!full.includes(targetUri)) {
+    const fallbackFull = buildExpandedUris(items, 'all');
+    if (fallbackFull.includes(targetUri)) full = fallbackFull;
+  }
   const uris = rotateUris(full, targetUri);
   console.log(`[App] playRotatedFromExpanded: target=${targetUri}, totale URI=${uris.length}`);
 
