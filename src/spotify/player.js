@@ -15,7 +15,7 @@
  */
 
 import { spotifyFetch } from '../auth/auth.js';
-import { getAuth } from '../auth/storage.js';
+import { getAuth, getLastDeviceId, saveLastDeviceId } from '../auth/storage.js';
 
 const SDK_SCRIPT_SRC = 'https://sdk.scdn.co/spotify-player.js';
 const SDK_NAME = 'Release Radar Expander (Web)';
@@ -205,21 +205,39 @@ function isMobileBrowser() {
 // ---- Risoluzione device ----
 
 /**
+ * Lista i device riprovando un paio di volte se la prima risposta è vuota.
+ * L'endpoint /me/player/devices è cachato e ha un lag di registrazione: subito
+ * dopo aver foregroundato Spotify il device può non comparire al primo colpo.
+ */
+async function listDevicesWithRetry(attempts = 3, delayMs = 600) {
+  for (let i = 0; i < attempts; i++) {
+    const devices = await listDevices();
+    if (devices.length > 0 || i === attempts - 1) return devices;
+    console.log(`[Player] Lista device vuota, ritento (${i + 1}/${attempts - 1})...`);
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+  return [];
+}
+
+/**
  * Risolve il device su cui suonare:
  *   1. device active → usalo
  *   2. nessuno active ma esistono device → transfer sul primo
- *   3. nessun device + desktop → inizializza SDK e usalo
- *   3. nessun device + mobile → errore immediato (SDK non supportato)
+ *   3. lista vuota ma esiste un device memorizzato → provalo (copre l'app
+ *      Spotify in background non listata ma ancora raggiungibile via Connect)
+ *   4. nessun device + desktop → inizializza SDK e usalo
+ *   4. nessun device + mobile → errore immediato (SDK non supportato)
  *
- * @returns {Promise<{deviceId: string, source: 'active'|'transferred'|'sdk'}>}
+ * @returns {Promise<{deviceId: string, source: 'active'|'transferred'|'remembered'|'sdk'}>}
  */
 export async function resolvePlaybackDevice() {
-  let devices = await listDevices();
+  let devices = await listDevicesWithRetry();
 
   // 1. Active device
   const active = devices.find(d => d.is_active);
   if (active) {
     console.log('[Player] Uso device attivo:', active.name);
+    saveLastDeviceId(active.id);
     return { deviceId: active.id, source: 'active' };
   }
 
@@ -228,16 +246,25 @@ export async function resolvePlaybackDevice() {
     const first = devices[0];
     console.log(`[Player] Nessun device attivo, transferisco su: ${first.name}`);
     await transferPlayback(first.id, false);
+    saveLastDeviceId(first.id);
     return { deviceId: first.id, source: 'transferred' };
   }
 
-  // 3. Nessun device → su mobile il SDK non funziona, errore immediato
+  // 3. Lista vuota → tenta l'ultimo device memorizzato (es. Spotify in background).
+  //    Il play effettivo è in playWithConnect, che gestisce un eventuale 404.
+  const remembered = getLastDeviceId();
+  if (remembered) {
+    console.log('[Player] Lista device vuota, provo device memorizzato:', remembered);
+    return { deviceId: remembered, source: 'remembered' };
+  }
+
+  // 4. Nessun device → su mobile il SDK non funziona, errore immediato
   if (isMobileBrowser()) {
     console.warn('[Player] Nessun device e browser mobile → SDK non supportato');
     throw new Error('NO_DEVICE_MOBILE');
   }
 
-  // 4. Nessun device + desktop → SDK fallback
+  // 5. Nessun device + desktop → SDK fallback
   console.log('[Player] Nessun device disponibile, inizializzo SDK...');
   const deviceId = await ensureSDKReady();
   await transferPlayback(deviceId, false);
@@ -438,12 +465,7 @@ export async function playWithConnect(opts = {}) {
     source = resolved.source;
   }
 
-  // 2. Set shuffle PRIMA del play (richiede device attivo, da qui in poi è attivo)
-  if (shuffle !== undefined) {
-    await setShuffleState(shuffle, deviceId);
-  }
-
-  // 3. Componi body
+  // 2. Componi body
   const body = {};
   if (contextUri) body.context_uri = contextUri;
   if (uris && uris.length > 0) body.uris = uris.slice(0, 100); // limite Spotify
@@ -454,16 +476,30 @@ export async function playWithConnect(opts = {}) {
   console.log(`[Player] PUT /me/player/play?${qs.toString()} body=`, body);
 
   try {
+    // Shuffle + play insieme nel try: se il device memorizzato è irraggiungibile
+    // il 404 può arrivare già dallo shuffle, e deve attivare lo stesso fallback.
+    if (shuffle !== undefined) {
+      await setShuffleState(shuffle, deviceId);
+    }
     await spotifyFetch(`/me/player/play?${qs.toString()}`, {
       method: 'PUT',
       body: JSON.stringify(body),
     });
     console.log(`[Player] Play avviato su device ${source}=${deviceId}`);
+    saveLastDeviceId(deviceId); // device confermato funzionante
     return { deviceId, source };
   } catch (e) {
-    // Se il device transferito si è scollegato nel frattempo (es. app chiusa)
-    // Spotify risponde 404 NO_ACTIVE_DEVICE. Riproviamo via SDK come fallback.
+    // Se il device risolto si è scollegato nel frattempo (es. app chiusa o
+    // device memorizzato non più raggiungibile) Spotify risponde 404 NO_ACTIVE_DEVICE.
     if (e.message === 'SPOTIFY_API_ERROR_404' && source !== 'sdk') {
+      // Su mobile il SDK non è supportato: invalida l'ID stantio e segnala
+      // all'utente di aprire/foregroundare Spotify.
+      if (isMobileBrowser()) {
+        console.warn('[Player] 404 sul device risolto su mobile → NO_DEVICE_MOBILE');
+        saveLastDeviceId(null);
+        throw new Error('NO_DEVICE_MOBILE');
+      }
+      // Desktop: fallback al Web Playback SDK.
       console.warn('[Player] 404 NO_ACTIVE_DEVICE sul device risolto. Fallback SDK...');
       const sdkDevice = await ensureSDKReady();
       await transferPlayback(sdkDevice, false);
@@ -471,6 +507,7 @@ export async function playWithConnect(opts = {}) {
         method: 'PUT',
         body: JSON.stringify(body),
       });
+      saveLastDeviceId(sdkDevice);
       return { deviceId: sdkDevice, source: 'sdk-fallback' };
     }
     throw e;
