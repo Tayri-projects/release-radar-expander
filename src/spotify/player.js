@@ -221,14 +221,15 @@ async function listDevicesWithRetry(attempts = 3, delayMs = 600) {
 
 /**
  * Risolve il device su cui suonare:
- *   1. device active → usalo
+ *   1. device active nella lista → usalo
  *   2. nessuno active ma esistono device → transfer sul primo
- *   3. lista vuota ma esiste un device memorizzato → provalo (copre l'app
- *      Spotify in background non listata ma ancora raggiungibile via Connect)
- *   4. nessun device + desktop → inizializza SDK e usalo
- *   4. nessun device + mobile → errore immediato (SDK non supportato)
+ *   3. lista vuota → legge GET /me/player: se Spotify sta suonando (anche in
+ *      background) il device è nel payload, che è più fresco di /me/player/devices
+ *   4. GET /me/player vuoto → tenta l'ultimo device memorizzato in storage
+ *   5. nessun device + desktop → inizializza SDK e usalo
+ *   5. nessun device + mobile → errore immediato (SDK non supportato)
  *
- * @returns {Promise<{deviceId: string, source: 'active'|'transferred'|'remembered'|'sdk'}>}
+ * @returns {Promise<{deviceId: string, source: 'active'|'transferred'|'current'|'remembered'|'sdk'}>}
  */
 export async function resolvePlaybackDevice() {
   let devices = await listDevicesWithRetry();
@@ -250,21 +251,34 @@ export async function resolvePlaybackDevice() {
     return { deviceId: first.id, source: 'transferred' };
   }
 
-  // 3. Lista vuota → tenta l'ultimo device memorizzato (es. Spotify in background).
-  //    Il play effettivo è in playWithConnect, che gestisce un eventuale 404.
+  // 3. Lista vuota → GET /me/player: contiene il device corrente anche quando
+  //    l'app Spotify è in background (non cachato come /me/player/devices).
+  try {
+    const state = await spotifyFetch('/me/player');
+    const currentDeviceId = state?.device?.id;
+    if (currentDeviceId) {
+      console.log('[Player] Device da /me/player (Spotify in background):', state.device.name);
+      saveLastDeviceId(currentDeviceId);
+      return { deviceId: currentDeviceId, source: 'current' };
+    }
+  } catch (err) {
+    console.warn('[Player] GET /me/player fallito (non bloccante):', err.message);
+  }
+
+  // 4. Nessuno stato attivo → tenta l'ultimo device memorizzato.
   const remembered = getLastDeviceId();
   if (remembered) {
-    console.log('[Player] Lista device vuota, provo device memorizzato:', remembered);
+    console.log('[Player] Provo device memorizzato:', remembered);
     return { deviceId: remembered, source: 'remembered' };
   }
 
-  // 4. Nessun device → su mobile il SDK non funziona, errore immediato
+  // 5. Nessun device → su mobile il SDK non funziona, errore immediato
   if (isMobileBrowser()) {
     console.warn('[Player] Nessun device e browser mobile → SDK non supportato');
     throw new Error('NO_DEVICE_MOBILE');
   }
 
-  // 5. Nessun device + desktop → SDK fallback
+  // 6. Nessun device + desktop → SDK fallback
   console.log('[Player] Nessun device disponibile, inizializzo SDK...');
   const deviceId = await ensureSDKReady();
   await transferPlayback(deviceId, false);
