@@ -665,7 +665,7 @@ async function attachHeartIcons() {
       if (allResults[i]) updateTrackHeartInList(id, true);
     });
   } catch (e) {
-    if (e.message === 'SPOTIFY_API_ERROR_403') promptLibraryReauth();
+    if (e.message === 'SPOTIFY_API_ERROR_403') promptLibraryReauth(e.spotifyMessage);
     else console.warn('[App] attachHeartIcons fallito:', e.message);
   }
 }
@@ -673,7 +673,7 @@ async function attachHeartIcons() {
 // Permessi libreria mancanti (token emesso prima degli scope user-library-*):
 // mostra una sola volta un avviso con il pulsante per rifare il login.
 let libraryReauthPrompted = false;
-function promptLibraryReauth() {
+function promptLibraryReauth(spotifyMessage) {
   if (libraryReauthPrompted) return;
   libraryReauthPrompted = true;
   // Diagnostica visibile: mostra cosa Spotify ha realmente concesso al token.
@@ -682,8 +682,9 @@ function promptLibraryReauth() {
   const diag = scopes === null
     ? 'nessuno scope salvato (token vecchio)'
     : hasLib ? 'scope libreria PRESENTI (403 anomalo)' : 'scope libreria ASSENTI';
-  console.log('[App] promptLibraryReauth — scope concessi:', scopes);
-  const toast = showToast(`Permessi preferiti non disponibili — ${diag}. Rieffettua il login.`, 'error', Infinity);
+  console.log('[App] promptLibraryReauth — scope concessi:', scopes, '| msg Spotify:', spotifyMessage);
+  const reason = spotifyMessage ? ` [Spotify: ${spotifyMessage}]` : '';
+  const toast = showToast(`Permessi preferiti non disponibili — ${diag}.${reason} Rieffettua il login.`, 'error', Infinity);
   const actionsRow = toast.querySelector('.toast-actions-row');
   const closeBtn = actionsRow?.querySelector('.toast-close') || toast.querySelector('.toast-close');
   const target = closeBtn?.parentNode || toast;
