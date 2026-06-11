@@ -2,7 +2,7 @@
  * Release Radar Expander — Entry Point
  */
 
-import { login, handleCallback, isLoggedIn, spotifyFetch, refreshAccessToken, hasLibraryScopes } from './auth/auth.js';
+import { login, handleCallback, isLoggedIn, spotifyFetch, refreshAccessToken, hasLibraryScopes, getGrantedScopes } from './auth/auth.js';
 import { getAuth, clearAuth, isTokenExpired, getAllSnapshotKeys, getSnapshot, saveSnapshot } from './auth/storage.js';
 import { showToast, dismissInfoToasts, dismissAllToasts, updateToastMessage } from './ui/toast.js';
 import { loadOrCreateCurrentSnapshot, forceRefreshSnapshot } from './spotify/snapshotManager.js';
@@ -676,7 +676,14 @@ let libraryReauthPrompted = false;
 function promptLibraryReauth() {
   if (libraryReauthPrompted) return;
   libraryReauthPrompted = true;
-  const toast = showToast('Per usare i preferiti devi aggiornare i permessi: rieffettua il login.', 'error', Infinity);
+  // Diagnostica visibile: mostra cosa Spotify ha realmente concesso al token.
+  const scopes = getGrantedScopes();
+  const hasLib = scopes && scopes.includes('user-library-read') && scopes.includes('user-library-modify');
+  const diag = scopes === null
+    ? 'nessuno scope salvato (token vecchio)'
+    : hasLib ? 'scope libreria PRESENTI (403 anomalo)' : 'scope libreria ASSENTI';
+  console.log('[App] promptLibraryReauth — scope concessi:', scopes);
+  const toast = showToast(`Permessi preferiti non disponibili — ${diag}. Rieffettua il login.`, 'error', Infinity);
   const actionsRow = toast.querySelector('.toast-actions-row');
   const closeBtn = actionsRow?.querySelector('.toast-close') || toast.querySelector('.toast-close');
   const target = closeBtn?.parentNode || toast;
@@ -707,7 +714,11 @@ async function toggleFavorite(trackId, isSaved) {
     // Il listener globale 'rr:savedchanged' aggiorna il cuore in lista.
     document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId, isSaved: !isSaved } }));
   } catch (err) {
-    if (err.message === 'SPOTIFY_API_ERROR_403') { promptLibraryReauth(); return; }
+    if (err.message === 'SPOTIFY_API_ERROR_403') {
+      if (err.spotifyMessage) showToast('Spotify 403: ' + err.spotifyMessage, 'error', Infinity);
+      promptLibraryReauth();
+      return;
+    }
     showToast('Errore preferiti: ' + err.message, 'error', Infinity);
   }
 }

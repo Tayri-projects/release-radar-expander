@@ -226,6 +226,14 @@ export function hasLibraryScopes() {
   return granted.includes('user-library-read') && granted.includes('user-library-modify');
 }
 
+/**
+ * Restituisce la stringa di scope effettivamente concessi al token corrente
+ * (o null se non salvata). Usata per diagnostica visibile su mobile.
+ */
+export function getGrantedScopes() {
+  return getAuth()?.scope || null;
+}
+
 // ---- spotifyFetch ----
 
 /**
@@ -288,7 +296,9 @@ export async function spotifyFetch(endpoint, options = {}, _retryCount = 0) {
     try { errBody = await response.json(); } catch (_) {}
     const msg = `[spotifyFetch] HTTP ${response.status} su ${endpoint}: ${JSON.stringify(errBody)}`;
     console.error(msg);
-    throw new Error(`SPOTIFY_API_ERROR_${response.status}`);
+    const err = new Error(`SPOTIFY_API_ERROR_${response.status}`);
+    err.spotifyMessage = errBody?.error?.message || '';
+    throw err;
   }
 
   // 204 No Content (es. dopo PUT playlist tracks)
