@@ -495,6 +495,11 @@ body {
   font-size: .75rem; color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.album-track-dur,
+.track-dur {
+  font-size: .78rem; color: var(--text-subdued);
+  flex-shrink: 0;
+}
 
 .album-detail-footer {
   height: env(safe-area-inset-bottom, 16px);
@@ -779,17 +784,6 @@ body {
 /* Spazio extra in fondo quando la barra è presente, così la lista
    e i footer-actions non finiscono sotto la barra. */
 body.has-now-playing #app { padding-bottom: 76px; }
-
-/* ---- Cuore nelle righe traccia ---- */
-.btn-heart {
-  background: none; border: none;
-  color: #e8375a; cursor: pointer;
-  padding: 6px; border-radius: var(--r-full);
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  transition: transform .1s, opacity .15s;
-}
-.btn-heart:active { transform: scale(.85); }
 
 /* =============================================
    BRANO IN RIPRODUZIONE — verde + equalizzatore animato

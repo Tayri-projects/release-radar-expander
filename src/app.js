@@ -2,19 +2,17 @@
  * Release Radar Expander — Entry Point
  */
 
-import { login, handleCallback, isLoggedIn, spotifyFetch, refreshAccessToken, hasLibraryScopes, getGrantedScopes } from './auth/auth.js';
+import { login, handleCallback, isLoggedIn, spotifyFetch, refreshAccessToken } from './auth/auth.js';
 import { getAuth, clearAuth, isTokenExpired, getAllSnapshotKeys, getSnapshot, saveSnapshot } from './auth/storage.js';
 import { showToast, dismissInfoToasts, dismissAllToasts, updateToastMessage } from './ui/toast.js';
 import { loadOrCreateCurrentSnapshot, forceRefreshSnapshot } from './spotify/snapshotManager.js';
 import { getCurrentWeekKey } from './spotify/expander.js';
 import { ensurePlaylistSynced, writeExpandedPlaylist } from './spotify/playlistWriter.js';
-import { playWithConnect, saveTrack, removeTrack, checkSavedTracks } from './spotify/player.js';
+import { playWithConnect } from './spotify/player.js';
 import { initNowPlaying, refreshNowPlaying } from './ui/nowPlaying.js';
 import { RR_SOURCE_PLAYLIST_NAME } from './auth/config.js';
 
 console.log('[App] Release Radar Expander avviato');
-
-const HEART_FULL_SVG = '<svg viewBox="0 0 24 24" fill="#e8375a" stroke="#e8375a" stroke-width="2" width="18" height="18"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
 
 // ---- Now Playing: stato corrente + highlight riga (verde + equalizzatore) ----
 //
@@ -265,7 +263,6 @@ function renderHome(user, snapshot, weekKey, fromCache) {
       chip.classList.add('active');
       document.getElementById('track-list').innerHTML = renderTrackList(allItems, currentFilter);
       attachTrackListeners(allItems, user, snapshot, weekKey, () => currentFilter);
-      attachHeartIcons();
     });
   });
 
@@ -296,7 +293,6 @@ function renderHome(user, snapshot, weekKey, fromCache) {
   });
 
   attachTrackListeners(allItems, user, snapshot, weekKey, () => currentFilter);
-  attachHeartIcons();
 
   // Ripristina l'evidenziazione del brano in riproduzione sul DOM appena renderizzato
   applyNowPlayingHighlight();
@@ -353,6 +349,7 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
               <p class="album-track-name">${escHtml(t.name)}</p>
               <p class="album-track-artist">${escHtml(t.artists.map(x => x.name).join(', '))}</p>
             </div>
+            <span class="album-track-dur">${formatTrackDuration(t.duration_ms)}</span>
             <button class="btn-more" data-idx="${idx}" title="Opzioni">${dotsSvg}</button>
           </div>
         `).join('')}
@@ -427,7 +424,6 @@ ${primaryArtistId ? `
 
   // Ripristina evidenziazione brano in riproduzione (se appartiene a questo album)
   applyNowPlayingHighlight();
-  attachHeartIcons();
 }
 
 /**
@@ -475,8 +471,6 @@ async function fillAlbumReleaseDate(album, typeLabel, snapshot, weekKey) {
 async function showAlbumTrackContextMenu(track, album) {
   const artistId = track.artists?.[0]?.id;
   const cover = album.cover || null;
-  // Stato preferiti dal DOM (già calcolato da attachHeartIcons): istantaneo
-  const isSaved = !!document.querySelector(`[data-track-id="${track.id}"] .btn-heart`);
 
   dismissContextMenu();
 
@@ -493,7 +487,6 @@ async function showAlbumTrackContextMenu(track, album) {
         </div>
       </div>
       <div class="context-divider"></div>
-      <button class="context-item" data-action="fav"><span>${isSaved ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}</span></button>
       <button class="context-item" data-action="share"><span>Condividi</span></button>
       <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
       ${artistId ? `<button class="context-item" data-action="artist"><span>Vai all'artista</span></button>` : ''}
@@ -509,8 +502,6 @@ async function showAlbumTrackContextMenu(track, album) {
     btn.addEventListener('click', async () => {
       const action = btn.dataset.action;
       dismissContextMenu();
-
-      if (action === 'fav') { await toggleFavorite(track.id, isSaved); }
 
       if (action === 'share') {
         const url = `https://open.spotify.com/track/${track.id}`;
@@ -608,122 +599,6 @@ function renderEmptyWeek(user, weekKey, allKeys, currentIdx) {
   }
 }
 
-// ---- Cuori / Preferiti nella lista tracce ----
-
-function createHeartButton(trackId) {
-  const btn = document.createElement('button');
-  btn.className = 'btn-heart';
-  btn.dataset.trackId = trackId;
-  btn.title = 'Rimuovi dai preferiti';
-  btn.innerHTML = HEART_FULL_SVG;
-  btn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    try {
-      await removeTrack(trackId);
-      btn.remove();
-      showToast('Rimosso dai preferiti ✓', 'info', 2000);
-      document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId, isSaved: false } }));
-    } catch (err) {
-      showToast('Errore rimozione preferiti: ' + err.message, 'error', Infinity);
-    }
-  });
-  return btn;
-}
-
-function updateTrackHeartInList(trackId, saved) {
-  const row = document.querySelector(`[data-track-id="${trackId}"]`);
-  if (!row) return;
-  const existing = row.querySelector('.btn-heart');
-  if (saved && !existing) {
-    const moreBtn = row.querySelector('.btn-more');
-    if (moreBtn) row.insertBefore(createHeartButton(trackId), moreBtn);
-  } else if (!saved && existing) {
-    existing.remove();
-  }
-}
-
-async function attachHeartIcons() {
-  const rows = document.querySelectorAll('[data-track-id]');
-  if (!rows.length) return;
-  const ids = [...rows].map(r => r.dataset.trackId).filter(Boolean);
-  if (!ids.length) return;
-
-  // Se sappiamo già che il token non ha gli scope libreria, evita le 403 e
-  // invita a rifare login (i cuori non possono essere caricati senza permesso).
-  if (hasLibraryScopes() === false) { promptLibraryReauth(); return; }
-
-  try {
-    // Batch da 50 (limite API)
-    const allResults = [];
-    for (let i = 0; i < ids.length; i += 50) {
-      const batch = ids.slice(i, i + 50);
-      const res = await checkSavedTracks(batch);
-      allResults.push(...res);
-    }
-
-    ids.forEach((id, i) => {
-      if (allResults[i]) updateTrackHeartInList(id, true);
-    });
-  } catch (e) {
-    if (e.message === 'SPOTIFY_API_ERROR_403') promptLibraryReauth(e.spotifyMessage);
-    else console.warn('[App] attachHeartIcons fallito:', e.message);
-  }
-}
-
-// Permessi libreria mancanti (token emesso prima degli scope user-library-*):
-// mostra una sola volta un avviso con il pulsante per rifare il login.
-let libraryReauthPrompted = false;
-function promptLibraryReauth(spotifyMessage) {
-  if (libraryReauthPrompted) return;
-  libraryReauthPrompted = true;
-  // Diagnostica visibile: mostra cosa Spotify ha realmente concesso al token.
-  const scopes = getGrantedScopes();
-  const hasLib = scopes && scopes.includes('user-library-read') && scopes.includes('user-library-modify');
-  const diag = scopes === null
-    ? 'nessuno scope salvato (token vecchio)'
-    : hasLib ? 'scope libreria PRESENTI (403 anomalo)' : 'scope libreria ASSENTI';
-  console.log('[App] promptLibraryReauth — scope concessi:', scopes, '| msg Spotify:', spotifyMessage);
-  const reason = spotifyMessage ? ` [Spotify: ${spotifyMessage}]` : '';
-  const toast = showToast(`Permessi preferiti non disponibili — ${diag}.${reason}\nScope concessi: ${scopes || '(nessuno)'}`, 'error', Infinity);
-  const actionsRow = toast.querySelector('.toast-actions-row');
-  const closeBtn = actionsRow?.querySelector('.toast-close') || toast.querySelector('.toast-close');
-  const target = closeBtn?.parentNode || toast;
-  const btn = document.createElement('button');
-  btn.className = 'toast-retry-btn';
-  btn.textContent = 'Rieffettua login';
-  btn.addEventListener('click', () => login());
-  target.insertBefore(btn, closeBtn);
-}
-
-// Sincronizza cuori lista quando il cuore della now playing bar viene toggleato
-document.addEventListener('rr:savedchanged', (e) => {
-  const { trackId, isSaved } = e.detail || {};
-  if (trackId) updateTrackHeartInList(trackId, isSaved);
-});
-
-// Aggiunge/rimuove un brano dai preferiti, aggiorna il cuore in lista e notifica.
-// Usato dalla voce "Aggiungi/Rimuovi dai preferiti" dei menu contestuali.
-async function toggleFavorite(trackId, isSaved) {
-  try {
-    if (isSaved) {
-      await removeTrack(trackId);
-      showToast('Rimosso dai preferiti ✓', 'info', 2000);
-    } else {
-      await saveTrack(trackId);
-      showToast('Aggiunto ai preferiti ✓', 'info', 2000);
-    }
-    // Il listener globale 'rr:savedchanged' aggiorna il cuore in lista.
-    document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId, isSaved: !isSaved } }));
-  } catch (err) {
-    if (err.message === 'SPOTIFY_API_ERROR_403') {
-      if (err.spotifyMessage) showToast('Spotify 403: ' + err.spotifyMessage, 'error', Infinity);
-      promptLibraryReauth();
-      return;
-    }
-    showToast('Errore preferiti: ' + err.message, 'error', Infinity);
-  }
-}
-
 // ---- Track list rendering ----
 
 function renderTrackList(items, filter) {
@@ -740,6 +615,7 @@ function renderTrackList(items, filter) {
             <p class="track-name">${escHtml(item.track.name)}</p>
             <p class="track-artist">${escHtml(item.track.artists.map(a => a.name).join(', '))}</p>
           </div>
+          <span class="track-dur">${formatTrackDuration(item.track.duration_ms)}</span>
           <button class="btn-more" data-idx="${idx}" title="Opzioni">
             <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
           </button>
@@ -823,8 +699,6 @@ function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) 
 async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurrentFilter) {
   const track = item.track;
   const artistId = track.artists?.[0]?.id;
-  // Stato preferiti dal DOM (già calcolato da attachHeartIcons): istantaneo
-  const isSaved = !!document.querySelector(`[data-track-id="${track.id}"] .btn-heart`);
 
   dismissContextMenu();
 
@@ -841,7 +715,6 @@ async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, ge
         </div>
       </div>
       <div class="context-divider"></div>
-      <button class="context-item" data-action="fav"><span>${isSaved ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}</span></button>
       <button class="context-item" data-action="share"><span>Condividi</span></button>
       <button class="context-item" data-action="remove"><span>Rimuovi dallo snapshot</span></button>
       <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
@@ -858,8 +731,6 @@ async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, ge
     btn.addEventListener('click', async () => {
       const action = btn.dataset.action;
       dismissContextMenu();
-
-      if (action === 'fav') { await toggleFavorite(track.id, isSaved); }
 
       if (action === 'share') {
         const url = `https://open.spotify.com/track/${track.id}`;

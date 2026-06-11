@@ -212,28 +212,6 @@ export function isLoggedIn() {
   return !!(auth?.access_token && auth?.refresh_token);
 }
 
-/**
- * Verifica se il token corrente ha gli scope per gestire i preferiti
- * (libreria). I token emessi prima dell'aggiunta di questi scope ne sono privi
- * e vanno rinnovati con un nuovo login.
- * @returns {boolean|null} true/false se lo scope è noto, null se sconosciuto
- *   (token "legacy" salvato prima che persistessimo lo scope)
- */
-export function hasLibraryScopes() {
-  const auth = getAuth();
-  if (!auth?.scope) return null; // sconosciuto
-  const granted = auth.scope.split(' ');
-  return granted.includes('user-library-read') && granted.includes('user-library-modify');
-}
-
-/**
- * Restituisce la stringa di scope effettivamente concessi al token corrente
- * (o null se non salvata). Usata per diagnostica visibile su mobile.
- */
-export function getGrantedScopes() {
-  return getAuth()?.scope || null;
-}
-
 // ---- spotifyFetch ----
 
 /**
