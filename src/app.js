@@ -684,7 +684,7 @@ function promptLibraryReauth(spotifyMessage) {
     : hasLib ? 'scope libreria PRESENTI (403 anomalo)' : 'scope libreria ASSENTI';
   console.log('[App] promptLibraryReauth — scope concessi:', scopes, '| msg Spotify:', spotifyMessage);
   const reason = spotifyMessage ? ` [Spotify: ${spotifyMessage}]` : '';
-  const toast = showToast(`Permessi preferiti non disponibili — ${diag}.${reason} Rieffettua il login.`, 'error', Infinity);
+  const toast = showToast(`Permessi preferiti non disponibili — ${diag}.${reason}\nScope concessi: ${scopes || '(nessuno)'}`, 'error', Infinity);
   const actionsRow = toast.querySelector('.toast-actions-row');
   const closeBtn = actionsRow?.querySelector('.toast-close') || toast.querySelector('.toast-close');
   const target = closeBtn?.parentNode || toast;
