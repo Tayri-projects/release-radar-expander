@@ -495,10 +495,6 @@ body {
   font-size: .75rem; color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.album-track-dur {
-  font-size: .78rem; color: var(--text-subdued);
-  flex-shrink: 0;
-}
 
 .album-detail-footer {
   height: env(safe-area-inset-bottom, 16px);
