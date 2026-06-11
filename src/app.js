@@ -353,7 +353,6 @@ function renderAlbumDetail(albumItem, user, snapshot, weekKey, getCurrentFilter)
               <p class="album-track-name">${escHtml(t.name)}</p>
               <p class="album-track-artist">${escHtml(t.artists.map(x => x.name).join(', '))}</p>
             </div>
-            <span class="album-track-dur">${formatTrackDuration(t.duration_ms)}</span>
             <button class="btn-more" data-idx="${idx}" title="Opzioni">${dotsSvg}</button>
           </div>
         `).join('')}
@@ -476,6 +475,8 @@ async function fillAlbumReleaseDate(album, typeLabel, snapshot, weekKey) {
 async function showAlbumTrackContextMenu(track, album) {
   const artistId = track.artists?.[0]?.id;
   const cover = album.cover || null;
+  // Stato preferiti dal DOM (già calcolato da attachHeartIcons): istantaneo
+  const isSaved = !!document.querySelector(`[data-track-id="${track.id}"] .btn-heart`);
 
   dismissContextMenu();
 
@@ -492,6 +493,7 @@ async function showAlbumTrackContextMenu(track, album) {
         </div>
       </div>
       <div class="context-divider"></div>
+      <button class="context-item" data-action="fav"><span>${isSaved ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}</span></button>
       <button class="context-item" data-action="share"><span>Condividi</span></button>
       <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
       ${artistId ? `<button class="context-item" data-action="artist"><span>Vai all'artista</span></button>` : ''}
@@ -507,6 +509,8 @@ async function showAlbumTrackContextMenu(track, album) {
     btn.addEventListener('click', async () => {
       const action = btn.dataset.action;
       dismissContextMenu();
+
+      if (action === 'fav') { await toggleFavorite(track.id, isSaved); }
 
       if (action === 'share') {
         const url = `https://open.spotify.com/track/${track.id}`;
@@ -663,6 +667,24 @@ document.addEventListener('rr:savedchanged', (e) => {
   if (trackId) updateTrackHeartInList(trackId, isSaved);
 });
 
+// Aggiunge/rimuove un brano dai preferiti, aggiorna il cuore in lista e notifica.
+// Usato dalla voce "Aggiungi/Rimuovi dai preferiti" dei menu contestuali.
+async function toggleFavorite(trackId, isSaved) {
+  try {
+    if (isSaved) {
+      await removeTrack(trackId);
+      showToast('Rimosso dai preferiti ✓', 'info', 2000);
+    } else {
+      await saveTrack(trackId);
+      showToast('Aggiunto ai preferiti ✓', 'info', 2000);
+    }
+    // Il listener globale 'rr:savedchanged' aggiorna il cuore in lista.
+    document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId, isSaved: !isSaved } }));
+  } catch (err) {
+    showToast('Errore preferiti: ' + err.message, 'error', Infinity);
+  }
+}
+
 // ---- Track list rendering ----
 
 function renderTrackList(items, filter) {
@@ -762,6 +784,8 @@ function attachTrackListeners(items, user, snapshot, weekKey, getCurrentFilter) 
 async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, getCurrentFilter) {
   const track = item.track;
   const artistId = track.artists?.[0]?.id;
+  // Stato preferiti dal DOM (già calcolato da attachHeartIcons): istantaneo
+  const isSaved = !!document.querySelector(`[data-track-id="${track.id}"] .btn-heart`);
 
   dismissContextMenu();
 
@@ -778,6 +802,7 @@ async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, ge
         </div>
       </div>
       <div class="context-divider"></div>
+      <button class="context-item" data-action="fav"><span>${isSaved ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}</span></button>
       <button class="context-item" data-action="share"><span>Condividi</span></button>
       <button class="context-item" data-action="remove"><span>Rimuovi dallo snapshot</span></button>
       <button class="context-item" data-action="queue"><span>Aggiungi alla coda</span></button>
@@ -794,6 +819,8 @@ async function showSingleContextMenu(item, snapshot, weekKey, user, allItems, ge
     btn.addEventListener('click', async () => {
       const action = btn.dataset.action;
       dismissContextMenu();
+
+      if (action === 'fav') { await toggleFavorite(track.id, isSaved); }
 
       if (action === 'share') {
         const url = `https://open.spotify.com/track/${track.id}`;
