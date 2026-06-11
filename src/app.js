@@ -2,7 +2,7 @@
  * Release Radar Expander — Entry Point
  */
 
-import { login, handleCallback, isLoggedIn, spotifyFetch, refreshAccessToken } from './auth/auth.js';
+import { login, handleCallback, isLoggedIn, spotifyFetch, refreshAccessToken, hasLibraryScopes } from './auth/auth.js';
 import { getAuth, clearAuth, isTokenExpired, getAllSnapshotKeys, getSnapshot, saveSnapshot } from './auth/storage.js';
 import { showToast, dismissInfoToasts, dismissAllToasts, updateToastMessage } from './ui/toast.js';
 import { loadOrCreateCurrentSnapshot, forceRefreshSnapshot } from './spotify/snapshotManager.js';
@@ -648,17 +648,43 @@ async function attachHeartIcons() {
   const ids = [...rows].map(r => r.dataset.trackId).filter(Boolean);
   if (!ids.length) return;
 
-  // Batch da 50 (limite API)
-  const allResults = [];
-  for (let i = 0; i < ids.length; i += 50) {
-    const batch = ids.slice(i, i + 50);
-    const res = await checkSavedTracks(batch);
-    allResults.push(...res);
-  }
+  // Se sappiamo già che il token non ha gli scope libreria, evita le 403 e
+  // invita a rifare login (i cuori non possono essere caricati senza permesso).
+  if (hasLibraryScopes() === false) { promptLibraryReauth(); return; }
 
-  ids.forEach((id, i) => {
-    if (allResults[i]) updateTrackHeartInList(id, true);
-  });
+  try {
+    // Batch da 50 (limite API)
+    const allResults = [];
+    for (let i = 0; i < ids.length; i += 50) {
+      const batch = ids.slice(i, i + 50);
+      const res = await checkSavedTracks(batch);
+      allResults.push(...res);
+    }
+
+    ids.forEach((id, i) => {
+      if (allResults[i]) updateTrackHeartInList(id, true);
+    });
+  } catch (e) {
+    if (e.message === 'SPOTIFY_API_ERROR_403') promptLibraryReauth();
+    else console.warn('[App] attachHeartIcons fallito:', e.message);
+  }
+}
+
+// Permessi libreria mancanti (token emesso prima degli scope user-library-*):
+// mostra una sola volta un avviso con il pulsante per rifare il login.
+let libraryReauthPrompted = false;
+function promptLibraryReauth() {
+  if (libraryReauthPrompted) return;
+  libraryReauthPrompted = true;
+  const toast = showToast('Per usare i preferiti devi aggiornare i permessi: rieffettua il login.', 'error', Infinity);
+  const actionsRow = toast.querySelector('.toast-actions-row');
+  const closeBtn = actionsRow?.querySelector('.toast-close') || toast.querySelector('.toast-close');
+  const target = closeBtn?.parentNode || toast;
+  const btn = document.createElement('button');
+  btn.className = 'toast-retry-btn';
+  btn.textContent = 'Rieffettua login';
+  btn.addEventListener('click', () => login());
+  target.insertBefore(btn, closeBtn);
 }
 
 // Sincronizza cuori lista quando il cuore della now playing bar viene toggleato
@@ -681,6 +707,7 @@ async function toggleFavorite(trackId, isSaved) {
     // Il listener globale 'rr:savedchanged' aggiorna il cuore in lista.
     document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId, isSaved: !isSaved } }));
   } catch (err) {
+    if (err.message === 'SPOTIFY_API_ERROR_403') { promptLibraryReauth(); return; }
     showToast('Errore preferiti: ' + err.message, 'error', Infinity);
   }
 }

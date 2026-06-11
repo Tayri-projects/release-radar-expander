@@ -186,6 +186,8 @@ export async function refreshAccessToken() {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token || auth.refresh_token,
         expires_in: tokens.expires_in,
+        // il refresh riflette gli scope realmente concessi al token corrente
+        scope: tokens.scope || auth.scope,
       };
 
       saveAuth(newTokens);
@@ -208,6 +210,20 @@ export async function refreshAccessToken() {
 export function isLoggedIn() {
   const auth = getAuth();
   return !!(auth?.access_token && auth?.refresh_token);
+}
+
+/**
+ * Verifica se il token corrente ha gli scope per gestire i preferiti
+ * (libreria). I token emessi prima dell'aggiunta di questi scope ne sono privi
+ * e vanno rinnovati con un nuovo login.
+ * @returns {boolean|null} true/false se lo scope è noto, null se sconosciuto
+ *   (token "legacy" salvato prima che persistessimo lo scope)
+ */
+export function hasLibraryScopes() {
+  const auth = getAuth();
+  if (!auth?.scope) return null; // sconosciuto
+  const granted = auth.scope.split(' ');
+  return granted.includes('user-library-read') && granted.includes('user-library-modify');
 }
 
 // ---- spotifyFetch ----

@@ -36,13 +36,17 @@ export function getAuth() {
   return load().auth || null;
 }
 
-export function saveAuth({ access_token, refresh_token, expires_in }) {
+export function saveAuth({ access_token, refresh_token, expires_in, scope }) {
   const data = load();
+  const prev = data.auth;
   data.auth = {
     access_token,
     refresh_token,
     // expires_at: timestamp Unix in ms
     expires_at: Date.now() + (expires_in - 60) * 1000, // 60s di margine
+    // scope effettivamente concesso da Spotify; preserva il precedente se il
+    // refresh non lo restituisce, così sappiamo quali permessi ha il token.
+    scope: scope ?? prev?.scope,
   };
   save(data);
   console.log('[Storage] Token salvati. Scadenza:', new Date(data.auth.expires_at).toLocaleTimeString());

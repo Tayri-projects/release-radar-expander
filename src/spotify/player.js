@@ -429,6 +429,9 @@ export async function checkSavedTracks(ids) {
     const result = await spotifyFetch(`/me/tracks/contains?${qs.toString()}`);
     return Array.isArray(result) ? result : ids.map(() => false);
   } catch (e) {
+    // 403 = scope libreria mancante: lascia propagare così il chiamante può
+    // chiedere il re-login. Altri errori (rete, ecc.) → degradano a "non salvato".
+    if (e.message === 'SPOTIFY_API_ERROR_403') throw e;
     console.warn('[Player] checkSavedTracks fallito:', e.message);
     return ids.map(() => false);
   }
