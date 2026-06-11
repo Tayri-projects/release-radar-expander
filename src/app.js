@@ -678,7 +678,7 @@ async function toggleFavorite(trackId, isSaved) {
       await saveTrack(trackId);
       showToast('Aggiunto ai preferiti ✓', 'info', 2000);
     }
-    updateTrackHeartInList(trackId, !isSaved);
+    // Il listener globale 'rr:savedchanged' aggiorna il cuore in lista.
     document.dispatchEvent(new CustomEvent('rr:savedchanged', { detail: { trackId, isSaved: !isSaved } }));
   } catch (err) {
     showToast('Errore preferiti: ' + err.message, 'error', Infinity);
